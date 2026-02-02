@@ -37,10 +37,7 @@ COPY --from=builder --chown=nodejs:nodejs /app/package.json ./
 COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
 
 # Create data directory for SQLite database
-RUN mkdir -p /data && chown nodejs:nodejs /data
-
-# Switch to non-root user
-USER nodejs
+RUN mkdir -p /app/data && chown nodejs:nodejs /app/data
 
 # Expose the application port
 EXPOSE 3000
@@ -48,6 +45,7 @@ EXPOSE 3000
 # Set default environment variables
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV DATABASE_PATH=/app/data/freeform.db
 
-# Run the application
-CMD ["node", "build/index.js"]
+# Fix permissions on mounted volume and run as nodejs
+CMD chown -R nodejs:nodejs /app/data && exec su nodejs -c "node build/index.js"
