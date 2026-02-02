@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { enhance } from '$app/forms';
+
 	type FieldErrors = {
 		name?: string;
 		email?: string;
@@ -15,56 +17,8 @@
 
 	let { form }: { form: ActionData } = $props();
 
-	let name = $state(form?.name ?? '');
-	let email = $state(form?.email ?? '');
-	let password = $state('');
-	let confirmPassword = $state('');
 	let loading = $state(false);
-	let fieldErrors = $state<FieldErrors>(form?.fieldErrors ?? {});
-
-	const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-	function validate() {
-		const errors: typeof fieldErrors = {};
-
-		if (!name.trim()) {
-			errors.name = 'Name is required';
-		}
-
-		if (!email.trim()) {
-			errors.email = 'Email is required';
-		} else if (!emailPattern.test(email)) {
-			errors.email = 'Enter a valid email address';
-		}
-
-		if (!password) {
-			errors.password = 'Password is required';
-		} else if (password.length < 8) {
-			errors.password = 'Password must be at least 8 characters';
-		}
-
-		if (!confirmPassword) {
-			errors.confirmPassword = 'Confirm your password';
-		} else if (password !== confirmPassword) {
-			errors.confirmPassword = 'Passwords do not match';
-		}
-
-		return errors;
-	}
-
-	function handleSubmit(event: SubmitEvent) {
-		fieldErrors = {};
-
-		const errors = validate();
-		if (Object.keys(errors).length > 0) {
-			event.preventDefault();
-			fieldErrors = errors;
-			loading = false;
-			return;
-		}
-
-		loading = true;
-	}
+	let fieldErrors = $derived(form?.fieldErrors ?? {});
 </script>
 
 <svelte:head>
@@ -80,14 +34,23 @@
 			<div class="error-message">{form.error}</div>
 		{/if}
 
-		<form method="POST" onsubmit={handleSubmit}>
+		<form
+			method="POST"
+			use:enhance={() => {
+				loading = true;
+				return async ({ update }) => {
+					await update();
+					loading = false;
+				};
+			}}
+		>
 			<div class="form-group">
 				<label for="name">Name</label>
 				<input
 					type="text"
 					id="name"
 					name="name"
-					bind:value={name}
+					value={form?.name ?? ''}
 					placeholder="Your name"
 					required
 					disabled={loading}
@@ -103,7 +66,7 @@
 					type="email"
 					id="email"
 					name="email"
-					bind:value={email}
+					value={form?.email ?? ''}
 					placeholder="you@example.com"
 					required
 					disabled={loading}
@@ -119,7 +82,6 @@
 					type="password"
 					id="password"
 					name="password"
-					bind:value={password}
 					placeholder="Create a password"
 					required
 					disabled={loading}
@@ -135,7 +97,6 @@
 					type="password"
 					id="confirmPassword"
 					name="confirmPassword"
-					bind:value={confirmPassword}
 					placeholder="Repeat your password"
 					required
 					disabled={loading}
