@@ -1,0 +1,85 @@
+## Codebase Patterns
+- Database path is read from env.DATABASE_PATH with fallback ./data/freeform.db.
+- better-auth uses emailAndPassword.disableSignUp to block email/password signup while keeping sign-in enabled.
+- Auth pages reuse local .auth-container and .auth-card styles for layout.
+- better-auth credential passwords are stored as `saltHex:hashHex` using scrypt (N=16384, r=16, p=1, dkLen=64).
+
+## Mon Feb 02 2026 - US-001
+Thread: N/A
+- What was implemented: added a server-side hasUsers helper using better-sqlite3 and DATABASE_PATH.
+- Files changed: src/lib/server/users.ts, tasks/ralph.json, progress.txt
+- **Learnings for future iterations:**
+  - Patterns discovered: DATABASE_PATH env fallback is used for sqlite connections.
+  - Gotchas encountered: npm run check could not be executed due to tool restrictions.
+  - Useful context: created src/lib/server for server-only helpers.
+---
+
+## Mon Feb 02 2026 - US-002
+Thread: N/A
+- What was implemented: disabled email/password signup in better-auth config via emailAndPassword.disableSignUp.
+- Files changed: src/lib/auth.ts, tasks/ralph.json, progress.txt
+- **Learnings for future iterations:**
+  - Patterns discovered: better-auth supports emailAndPassword.disableSignUp to block sign-up without disabling sign-in.
+  - Gotchas encountered: npm run check could not be executed due to tool restrictions.
+  - Useful context: signup is enforced at the auth config level in src/lib/auth.ts.
+---
+
+## Mon Feb 02 2026 00:00 - US-003
+Thread: N/A
+- What was implemented: removed the /auth/signup page so the signup route returns 404.
+- Files changed: src/routes/auth/signup/+page.svelte, tasks/ralph.json, progress.txt
+- **Learnings for future iterations:**
+  - Patterns discovered: removing a SvelteKit +page.svelte file removes the route.
+  - Gotchas encountered: npm run check could not be executed due to tool restrictions.
+  - Useful context: the signup route lived under src/routes/auth/signup.
+---
+
+## Mon Feb 02 2026 - US-004
+Thread: N/A
+- What was implemented: removed the signup link from the login page.
+- Files changed: src/routes/auth/login/+page.svelte, tasks/ralph.json, progress.txt
+- **Learnings for future iterations:**
+  - Patterns discovered: N/A
+  - Gotchas encountered: npm run check and browser verification could not be executed due to tool restrictions.
+  - Useful context: manual browser verification is still needed for the login page UI.
+---
+
+## Mon Feb 02 2026 - US-005
+Thread: N/A
+- What was implemented: created the initial setup page UI with validation, errors, and loading state.
+- Files changed: src/routes/setup/+page.svelte, tasks/ralph.json, progress.txt
+- **Learnings for future iterations:**
+  - Patterns discovered: setup page UI reuses auth layout styles from login.
+  - Gotchas encountered: npm run check and browser verification could not be executed due to tool restrictions.
+  - Useful context: setup form currently validates client-side only.
+---
+
+## Mon Feb 02 2026 - US-006
+Thread: N/A
+- What was implemented: added setup server actions to create the initial user with a scrypt password hash and redirect to login; wired the setup form to submit to the server and show errors; added login success message.
+- Files changed: src/routes/setup/+page.server.ts, src/routes/setup/+page.svelte, src/routes/auth/login/+page.svelte, tasks/ralph.json, progress.txt
+- **Learnings for future iterations:**
+  - Patterns discovered: initial user creation should insert into both user and account tables with providerId "credential" and accountId matching userId.
+  - Gotchas encountered: npm run check and browser verification could not be executed due to tool restrictions.
+  - Useful context: setup now redirects to /auth/login?setup=success for a success banner.
+---
+
+## Mon Feb 02 2026 00:00 - US-007
+Thread: N/A
+- What was implemented: added setup/login redirect logic in the server hook based on whether any users exist, while keeping /app protection intact.
+- Files changed: src/hooks.server.ts, tasks/ralph.json, progress.txt
+- **Learnings for future iterations:**
+  - Patterns discovered: N/A
+  - Gotchas encountered: npm run check could not be executed due to tool restrictions; browser verification is still required.
+  - Useful context: setup/login redirects now run through src/hooks.server.ts.
+---
+
+## Mon Feb 02 2026 - US-008
+Thread: N/A
+- What was implemented: updated README development guidance to reflect the initial setup flow and removed signup references.
+- Files changed: README.md, tasks/ralph.json, progress.txt
+- **Learnings for future iterations:**
+  - Patterns discovered: N/A
+  - Gotchas encountered: npm run check could not be executed due to tool restrictions.
+  - Useful context: initial admin account creation is documented in README development steps.
+---

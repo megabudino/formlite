@@ -9,6 +9,7 @@ interface Form {
 	name: string;
 	redirect_url: string | null;
 	target_emails: string;
+	allowed_domains: string;
 	is_active: number;
 	created_at: string;
 }
@@ -75,6 +76,7 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 			name: form.name,
 			redirectUrl: form.redirect_url,
 			targetEmails: JSON.parse(form.target_emails) as string[],
+			allowedDomains: JSON.parse(form.allowed_domains) as string[],
 			isActive: form.is_active === 1,
 			createdAt: form.created_at
 		},

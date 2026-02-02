@@ -49,7 +49,7 @@
         "Typecheck passes (npm run check)"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -63,7 +63,7 @@
         "Typecheck passes (npm run check)"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -82,7 +82,7 @@
         "Typecheck passes (npm run check)"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

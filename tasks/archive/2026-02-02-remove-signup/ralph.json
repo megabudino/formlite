@@ -1,0 +1,128 @@
+{
+  "project": "Freeform",
+  "branchName": "ralph/remove-signup",
+  "description": "Remove public signup and add initial setup flow - when no users exist, prompt for seed user creation",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Create helper to check if users exist",
+      "description": "As a developer, I want a server-side helper to check if any users exist in the database.",
+      "acceptanceCriteria": [
+        "Create src/lib/server/users.ts with hasUsers(): boolean function",
+        "Function queries SELECT COUNT(*) FROM user and returns true if count > 0",
+        "Uses better-sqlite3 with DATABASE_PATH from environment (same pattern as src/lib/auth.ts)",
+        "Typecheck passes (npm run check)"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Disable signup in better-auth configuration",
+      "description": "As a developer, I want to disable the signup API endpoint so that unauthorized users cannot create accounts.",
+      "acceptanceCriteria": [
+        "Modify better-auth configuration in src/lib/auth.ts to disable email signup",
+        "Set emailAndPassword.enabled to false OR use signUp.disabled option",
+        "POST to /api/auth/sign-up/email should no longer create users",
+        "Typecheck passes (npm run check)"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Remove signup route and page",
+      "description": "As a developer, I want to remove the signup page so that users cannot access the registration form.",
+      "acceptanceCriteria": [
+        "Delete src/routes/auth/signup/+page.svelte",
+        "Delete src/routes/auth/signup directory if empty",
+        "Navigating to /auth/signup should return 404",
+        "Typecheck passes (npm run check)"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Remove signup links from login page",
+      "description": "As a user, I should not see Sign up links on the login page since registration is disabled.",
+      "acceptanceCriteria": [
+        "Remove the paragraph with 'Don't have an account? Sign up' link from src/routes/auth/login/+page.svelte (around line 78-80)",
+        "Login page renders without any references to signup",
+        "Typecheck passes (npm run check)",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Create setup page UI",
+      "description": "As an admin, I want to see a setup page on first visit so I can create my account.",
+      "acceptanceCriteria": [
+        "Create src/routes/setup/+page.svelte with form fields: name, email, password, confirmPassword",
+        "Reuse auth styling patterns (.auth-container, .auth-card) from login page",
+        "Title: 'Initial Setup' with subtitle 'Create your admin account'",
+        "Client-side validation: name required, valid email format, password min 8 chars, passwords must match",
+        "Show error messages for validation failures",
+        "Submit button shows loading state while submitting",
+        "Typecheck passes (npm run check)",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Create setup page server logic",
+      "description": "As a developer, I want server-side logic to handle initial user creation securely.",
+      "acceptanceCriteria": [
+        "Create src/routes/setup/+page.server.ts with load function and actions",
+        "load function: use hasUsers() helper; if users exist, redirect to /auth/login",
+        "actions.default: validate input, create user using better-auth API or direct DB insert with hashed password",
+        "After successful user creation, redirect to /auth/login with success message or auto-login",
+        "If users already exist when form is submitted, return error (prevent race condition)",
+        "Typecheck passes (npm run check)"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Redirect to setup when no users exist",
+      "description": "As a user visiting the app for the first time, I should be redirected to setup if no users exist.",
+      "acceptanceCriteria": [
+        "Modify src/hooks.server.ts to import and use hasUsers() helper",
+        "If no users exist and path is /auth/login, redirect 302 to /setup",
+        "If no users exist and path is /setup, allow access (no redirect)",
+        "If users exist and path is /setup, redirect 302 to /auth/login",
+        "Existing /app protection logic remains unchanged",
+        "Typecheck passes (npm run check)",
+        "Verify in browser using dev-browser skill: fresh DB redirects to setup; after user exists, /setup redirects to login"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Update documentation",
+      "description": "As a user reading the README, I should understand the new setup flow.",
+      "acceptanceCriteria": [
+        "Update README.md Development section to mention initial setup creates admin account",
+        "Remove or update any references to 'signup' in README.md",
+        "Add note that first visit after fresh install prompts for admin account creation",
+        "Typecheck passes (npm run check)"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": ""
+    }
+  ]
+}

@@ -3,14 +3,101 @@ import type { RequestHandler } from './$types';
 import db from '$lib/db';
 import { sendSubmissionEmail } from '$lib/email';
 import { dispatchWebhooks, type Webhook } from '$lib/webhooks';
+import { isOriginAllowed } from '$lib/server/origin';
 
-const corsHeaders = {
-	'Access-Control-Allow-Origin': '*',
+const baseCorsHeaders = {
 	'Access-Control-Allow-Methods': 'POST, OPTIONS',
 	'Access-Control-Allow-Headers': 'Content-Type'
 };
 
-export const OPTIONS: RequestHandler = async () => {
+function getRequestOrigin(request: Request): string | null {
+	const origin = request.headers.get('origin');
+	if (origin) {
+		return origin;
+	}
+
+	const referer = request.headers.get('referer');
+	if (!referer) {
+		return null;
+	}
+
+	try {
+		return new URL(referer).origin;
+	} catch {
+		return null;
+	}
+}
+
+function getRequestIp(request: Request): string | null {
+	return request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || null;
+}
+
+function parseAllowedDomains(rawDomains: string): string[] {
+	try {
+		const parsed = JSON.parse(rawDomains);
+		return Array.isArray(parsed) ? parsed : [];
+	} catch {
+		return [];
+	}
+}
+
+function buildCorsHeaders(
+	allowedDomains: string[],
+	origin: string | null,
+	originAllowed: boolean
+): Record<string, string> {
+	if (allowedDomains.length === 0) {
+		return { ...baseCorsHeaders, 'Access-Control-Allow-Origin': '*' };
+	}
+
+	if (originAllowed && origin) {
+		return { ...baseCorsHeaders, 'Access-Control-Allow-Origin': origin, Vary: 'Origin' };
+	}
+
+	return { ...baseCorsHeaders, Vary: 'Origin' };
+}
+
+function logBlockedRequest(
+	formId: string,
+	request: Request,
+	origin: string | null,
+	data: Record<string, unknown>
+): void {
+	const ip = getRequestIp(request);
+	const userAgent = request.headers.get('user-agent') || null;
+
+	const insertStmt = db.prepare(
+		'INSERT INTO blocked_requests (form_id, origin, ip, user_agent, data, reason) VALUES (?, ?, ?, ?, ?, ?)'
+	);
+	insertStmt.run(formId, origin, ip, userAgent, JSON.stringify(data), 'origin_not_allowed');
+}
+
+export const OPTIONS: RequestHandler = async ({ params, request }) => {
+	const { form_id } = params;
+	const form = db
+		.prepare('SELECT allowed_domains FROM forms WHERE id = ?')
+		.get(form_id) as Pick<Form, 'allowed_domains'> | undefined;
+
+	if (!form) {
+		return new Response(null, {
+			status: 404,
+			headers: { ...baseCorsHeaders, 'Access-Control-Allow-Origin': '*' }
+		});
+	}
+
+	const allowedDomains = parseAllowedDomains(form.allowed_domains);
+	const requestOrigin = getRequestOrigin(request);
+	const originAllowed = isOriginAllowed(requestOrigin, allowedDomains);
+	const corsHeaders = buildCorsHeaders(allowedDomains, requestOrigin, originAllowed);
+
+	if (!originAllowed) {
+		logBlockedRequest(form_id, request, requestOrigin, {});
+		return new Response(null, {
+			status: 403,
+			headers: corsHeaders
+		});
+	}
+
 	return new Response(null, {
 		status: 204,
 		headers: corsHeaders
@@ -23,6 +110,7 @@ interface Form {
 	name: string;
 	redirect_url: string | null;
 	target_emails: string;
+	allowed_domains: string;
 	is_active: number;
 	created_at: string;
 }
@@ -64,10 +152,18 @@ export const POST: RequestHandler = async ({ params, request }) => {
 
 	if (!form) {
 		if (isAjax) {
-			return json({ ok: false, error: 'Form not found' }, { status: 404, headers: corsHeaders });
+			return json(
+				{ ok: false, error: 'Form not found' },
+				{ status: 404, headers: { ...baseCorsHeaders, 'Access-Control-Allow-Origin': '*' } }
+			);
 		}
 		throw error(404, 'Form not found');
 	}
+
+	const allowedDomains = parseAllowedDomains(form.allowed_domains);
+	const requestOrigin = getRequestOrigin(request);
+	const originAllowed = isOriginAllowed(requestOrigin, allowedDomains);
+	const corsHeaders = buildCorsHeaders(allowedDomains, requestOrigin, originAllowed);
 
 	if (!form.is_active) {
 		if (isAjax) {
@@ -105,6 +201,14 @@ export const POST: RequestHandler = async ({ params, request }) => {
 
 	const { _gotcha, ...cleanData } = data;
 
+	if (!originAllowed) {
+		logBlockedRequest(form_id, request, requestOrigin, cleanData);
+		return json(
+			{ ok: false, error: 'Origin not allowed' },
+			{ status: 403, headers: corsHeaders }
+		);
+	}
+
 	// Honeypot spam filter: if _gotcha has any value, it's likely a bot
 	// Return 200 OK to fool the bot, but don't store the submission
 	if (_gotcha !== undefined && _gotcha !== '') {
@@ -113,7 +217,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 
 	// Build meta object with request headers
 	const meta = {
-		ip: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || null,
+		ip: getRequestIp(request),
 		userAgent: request.headers.get('user-agent') || null,
 		referer: request.headers.get('referer') || null
 	};
