@@ -73,3 +73,13 @@ Thread: N/A
   - Gotchas encountered: npm run check could not be executed due to tool restrictions; browser verification is still required.
   - Useful context: setup/login redirects now run through src/hooks.server.ts.
 ---
+
+## Mon Feb 02 2026 - US-008
+Thread: N/A
+- What was implemented: updated README development guidance to reflect the initial setup flow and removed signup references.
+- Files changed: README.md, tasks/ralph.json, progress.txt
+- **Learnings for future iterations:**
+  - Patterns discovered: N/A
+  - Gotchas encountered: npm run check could not be executed due to tool restrictions.
+  - Useful context: initial admin account creation is documented in README development steps.
+---

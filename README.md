@@ -4,7 +4,7 @@ A self-hosted Formspree alternative - multi-tenant form backend with email notif
 
 ## Features
 
-- 🔒 User authentication (signup, login, logout)
+- 🔒 User authentication (initial setup, login, logout)
 - 📝 Create and manage multiple forms
 - 📧 Email notifications via Mailgun
 - 🔗 Webhook integrations with HMAC signatures
@@ -52,6 +52,8 @@ npm run db:init
 ```bash
 npm run dev
 ```
+
+4. On first visit with a fresh database, you'll be redirected to `/setup` to create the initial admin account. After setup, use `/auth/login` for access.
 
 ## Building
 
