@@ -1,11 +1,8 @@
 import { betterAuth } from 'better-auth';
-import Database from 'better-sqlite3';
-import { env } from '$env/dynamic/private';
-
-const DATABASE_PATH = env.DATABASE_PATH || './data/freeform.db';
+import db from '$lib/db';
 
 export const auth = betterAuth({
-	database: new Database(DATABASE_PATH),
+	database: db,
 	emailAndPassword: {
 		enabled: true,
 		disableSignUp: true,
