@@ -1,16 +1,18 @@
 {
   "project": "Freeform",
-  "branchName": "ralph/remove-signup",
-  "description": "Remove public signup and add initial setup flow - when no users exist, prompt for seed user creation",
+  "branchName": "ralph/allowed-domains",
+  "description": "Add per-form allowed domains configuration for cross-origin submission validation with CORS/CSRF protection and spam logging",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Create helper to check if users exist",
-      "description": "As a developer, I want a server-side helper to check if any users exist in the database.",
+      "title": "Create database migrations system",
+      "description": "As a developer, I want a migrations system so schema changes can be applied consistently across all instances.",
       "acceptanceCriteria": [
-        "Create src/lib/server/users.ts with hasUsers(): boolean function",
-        "Function queries SELECT COUNT(*) FROM user and returns true if count > 0",
-        "Uses better-sqlite3 with DATABASE_PATH from environment (same pattern as src/lib/auth.ts)",
+        "Create src/lib/migrations/ directory",
+        "Create src/lib/migrations/index.ts with runMigrations(db: Database) function",
+        "Create migrations table: CREATE TABLE IF NOT EXISTS migrations (id TEXT PRIMARY KEY, applied_at TEXT NOT NULL)",
+        "Migrations are applied in order and tracked to prevent re-running",
+        "Call runMigrations() from src/lib/db.ts after database initialization",
         "Typecheck passes (npm run check)"
       ],
       "priority": 1,
@@ -19,109 +21,121 @@
     },
     {
       "id": "US-002",
-      "title": "Disable signup in better-auth configuration",
-      "description": "As a developer, I want to disable the signup API endpoint so that unauthorized users cannot create accounts.",
+      "title": "Add allowed_domains column and blocked_requests table via migration",
+      "description": "As a developer, I want to store allowed domains per form and log blocked requests.",
       "acceptanceCriteria": [
-        "Modify better-auth configuration in src/lib/auth.ts to disable email signup",
-        "Set emailAndPassword.enabled to false OR use signUp.disabled option",
-        "POST to /api/auth/sign-up/email should no longer create users",
+        "Create src/lib/migrations/001_add_allowed_domains.ts migration file",
+        "Migration adds allowed_domains TEXT NOT NULL DEFAULT '[]' column to forms table using ALTER TABLE",
+        "Migration creates blocked_requests table with columns: id INTEGER PRIMARY KEY AUTOINCREMENT, form_id TEXT NOT NULL, origin TEXT, ip TEXT, user_agent TEXT, data TEXT NOT NULL DEFAULT '{}', reason TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), FOREIGN KEY (form_id) REFERENCES forms(id) ON DELETE CASCADE",
+        "Add index on blocked_requests(form_id)",
+        "Update src/lib/schema.sql to include both allowed_domains column and blocked_requests table for fresh installs",
         "Typecheck passes (npm run check)"
       ],
       "priority": 2,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-003",
-      "title": "Remove signup route and page",
-      "description": "As a developer, I want to remove the signup page so that users cannot access the registration form.",
+      "title": "Create origin validation utility",
+      "description": "As a developer, I want a utility function to validate request origins against allowed domains.",
       "acceptanceCriteria": [
-        "Delete src/routes/auth/signup/+page.svelte",
-        "Delete src/routes/auth/signup directory if empty",
-        "Navigating to /auth/signup should return 404",
+        "Create src/lib/server/origin.ts with isOriginAllowed(origin: string | null, allowedDomains: string[]): boolean function",
+        "Empty allowedDomains array returns true (allow all)",
+        "Supports full origins (https://example.com) - exact match",
+        "Supports domain-only (example.com) - matches any protocol",
+        "Supports wildcards (*.example.com) - matches subdomains like foo.example.com",
+        "Matching is case-insensitive",
         "Typecheck passes (npm run check)"
       ],
       "priority": 3,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-004",
-      "title": "Remove signup links from login page",
-      "description": "As a user, I should not see Sign up links on the login page since registration is disabled.",
+      "title": "Update Form interface and types",
+      "description": "As a developer, I want consistent typing for allowed_domains across the codebase.",
       "acceptanceCriteria": [
-        "Remove the paragraph with 'Don't have an account? Sign up' link from src/routes/auth/login/+page.svelte (around line 78-80)",
-        "Login page renders without any references to signup",
-        "Typecheck passes (npm run check)",
-        "Verify in browser using dev-browser skill"
+        "Update Form interface in src/routes/app/forms/[id]/+page.server.ts to include allowed_domains: string",
+        "Update Form interface in src/routes/s/[form_id]/+server.ts to include allowed_domains: string",
+        "Update load function return type in +page.server.ts to include allowedDomains: string[]",
+        "Typecheck passes (npm run check)"
       ],
       "priority": 4,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-005",
-      "title": "Create setup page UI",
-      "description": "As an admin, I want to see a setup page on first visit so I can create my account.",
+      "title": "Validate origin on form submission endpoint and log blocked requests",
+      "description": "As a form owner, I want submissions rejected if they come from non-allowed origins, and blocked requests logged to the database.",
       "acceptanceCriteria": [
-        "Create src/routes/setup/+page.svelte with form fields: name, email, password, confirmPassword",
-        "Reuse auth styling patterns (.auth-container, .auth-card) from login page",
-        "Title: 'Initial Setup' with subtitle 'Create your admin account'",
-        "Client-side validation: name required, valid email format, password min 8 chars, passwords must match",
-        "Show error messages for validation failures",
-        "Submit button shows loading state while submitting",
-        "Typecheck passes (npm run check)",
-        "Verify in browser using dev-browser skill"
+        "Update src/routes/s/[form_id]/+server.ts to check Origin header (fallback to Referer)",
+        "Import and use isOriginAllowed from src/lib/server/origin.ts",
+        "Load allowed_domains from form record and parse as JSON array",
+        "If origin not allowed, insert into blocked_requests table with reason 'origin_not_allowed', origin, IP, user agent, and submitted data",
+        "If origin not allowed, return 403 with { ok: false, error: 'Origin not allowed' }",
+        "If allowed_domains is empty, allow all origins (current behavior)",
+        "CORS Access-Control-Allow-Origin header reflects the validated origin (not *) when domains are configured",
+        "OPTIONS preflight also validates origin and returns appropriate CORS headers",
+        "Typecheck passes (npm run check)"
       ],
       "priority": 5,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-006",
-      "title": "Create setup page server logic",
-      "description": "As a developer, I want server-side logic to handle initial user creation securely.",
+      "title": "Add server actions for allowed domains management",
+      "description": "As a developer, I want server actions to add/remove allowed domains.",
       "acceptanceCriteria": [
-        "Create src/routes/setup/+page.server.ts with load function and actions",
-        "load function: use hasUsers() helper; if users exist, redirect to /auth/login",
-        "actions.default: validate input, create user using better-auth API or direct DB insert with hashed password",
-        "After successful user creation, redirect to /auth/login with success message or auto-login",
-        "If users already exist when form is submitted, return error (prevent race condition)",
+        "Add addAllowedDomain action in src/routes/app/forms/[id]/+page.server.ts",
+        "Add removeAllowedDomain action in src/routes/app/forms/[id]/+page.server.ts",
+        "Validate domain format (reject empty strings, trim whitespace)",
+        "Normalize domains (trim, lowercase)",
+        "Prevent duplicates (return error if domain already exists)",
+        "Return allowedDomains: string[] in load function form data",
         "Typecheck passes (npm run check)"
       ],
       "priority": 6,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-007",
-      "title": "Redirect to setup when no users exist",
-      "description": "As a user visiting the app for the first time, I should be redirected to setup if no users exist.",
+      "title": "Add allowed domains UI to form settings",
+      "description": "As a user, I want to manage allowed domains in the form settings page.",
       "acceptanceCriteria": [
-        "Modify src/hooks.server.ts to import and use hasUsers() helper",
-        "If no users exist and path is /auth/login, redirect 302 to /setup",
-        "If no users exist and path is /setup, allow access (no redirect)",
-        "If users exist and path is /setup, redirect 302 to /auth/login",
-        "Existing /app protection logic remains unchanged",
+        "Add Allowed Domains section in Settings tab of src/routes/app/forms/[id]/+page.svelte",
+        "Display current allowed domains as a list with remove buttons (similar to target emails UI)",
+        "Input field to add new domain with Add button",
+        "Show validation error messages from server actions",
+        "Help text explains: empty list = allow all origins, supports wildcards",
+        "Shows examples in help text: example.com, https://example.com, *.example.com",
         "Typecheck passes (npm run check)",
-        "Verify in browser using dev-browser skill: fresh DB redirects to setup; after user exists, /setup redirects to login"
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 7,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-008",
-      "title": "Update documentation",
-      "description": "As a user reading the README, I should understand the new setup flow.",
+      "title": "Add Spam tab to view blocked requests",
+      "description": "As a user, I want to see blocked requests in a Spam tab so I can monitor rejected submissions.",
       "acceptanceCriteria": [
-        "Update README.md Development section to mention initial setup creates admin account",
-        "Remove or update any references to 'signup' in README.md",
-        "Add note that first visit after fresh install prompts for admin account creation",
-        "Typecheck passes (npm run check)"
+        "Add Spam tab to the form detail page navigation in src/routes/app/forms/[id]/+page.svelte (after Submissions tab)",
+        "Load blocked requests in +page.server.ts with pagination (similar to submissions, 20 per page)",
+        "Display blocked requests list showing: date, origin, reason, and expandable data section",
+        "Show empty state message when no blocked requests exist",
+        "Add Clear All button to delete all blocked requests for the form",
+        "Add clearBlockedRequests server action that deletes all blocked_requests where form_id matches",
+        "Typecheck passes (npm run check)",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 8,
-      "passes": true,
+      "passes": false,
       "notes": ""
     }
   ]

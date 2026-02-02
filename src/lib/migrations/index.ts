@@ -1,0 +1,37 @@
+import Database from 'better-sqlite3';
+
+type Migration = {
+	id: string;
+	up: (db: Database.Database) => void;
+};
+
+const migrations: Migration[] = [];
+
+function runMigrations(db: Database.Database): void {
+	db.exec(
+		`CREATE TABLE IF NOT EXISTS migrations (
+			id TEXT PRIMARY KEY,
+			applied_at TEXT NOT NULL
+		);`
+	);
+
+	const appliedRows = db.prepare('SELECT id FROM migrations').all() as { id: string }[];
+	const applied = new Set(appliedRows.map((row) => row.id));
+
+	for (const migration of migrations) {
+		if (applied.has(migration.id)) {
+			continue;
+		}
+
+		const applyMigration = db.transaction(() => {
+			migration.up(db);
+			db.prepare('INSERT INTO migrations (id, applied_at) VALUES (?, datetime(\'now\'))').run(
+				migration.id
+			);
+		});
+
+		applyMigration();
+	}
+}
+
+export { runMigrations, type Migration, migrations };

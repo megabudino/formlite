@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import { env } from '$env/dynamic/private';
 import { mkdirSync, existsSync } from 'fs';
 import { dirname } from 'path';
+import { runMigrations } from '$lib/migrations';
 
 let _db: Database.Database | null = null;
 
@@ -113,6 +114,7 @@ function getDb(): Database.Database {
 		_db.pragma('journal_mode = WAL');
 		_db.pragma('foreign_keys = ON');
 		_db.exec(SCHEMA);
+		runMigrations(_db);
 	}
 	return _db;
 }
