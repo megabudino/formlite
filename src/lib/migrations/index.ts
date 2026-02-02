@@ -1,11 +1,12 @@
 import Database from 'better-sqlite3';
+import { migration as addAllowedDomains } from './001_add_allowed_domains';
 
 type Migration = {
 	id: string;
 	up: (db: Database.Database) => void;
 };
 
-const migrations: Migration[] = [];
+const migrations: Migration[] = [addAllowedDomains];
 
 function runMigrations(db: Database.Database): void {
 	db.exec(

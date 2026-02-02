@@ -32,7 +32,7 @@
         "Typecheck passes (npm run check)"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

@@ -5,6 +5,7 @@
 - better-auth credential passwords are stored as `saltHex:hashHex` using scrypt (N=16384, r=16, p=1, dkLen=64).
 - Form settings use similar UI patterns for lists (emails, webhooks) with add/remove actions.
 - Migrations are registered in `src/lib/migrations/index.ts` and applied via `runMigrations` in `src/lib/db.ts`.
+- Schema changes should update both migrations and `src/lib/schema.sql` for new installs.
 
 ---
 
@@ -16,4 +17,14 @@ Thread: N/A
   - Patterns discovered: migrations are tracked in a `migrations` table and executed from the registry in `src/lib/migrations/index.ts`.
   - Gotchas encountered: remember to run `runMigrations` after schema initialization so new installs still work.
   - Useful context: new migration files should be added to the migrations array in order.
+---
+
+## 2026-02-02 00:30 - US-002
+Thread: N/A
+- What was implemented: added allowed_domains and blocked_requests schema via migration and base schema updates.
+- Files changed: `src/lib/migrations/001_add_allowed_domains.ts`, `src/lib/migrations/index.ts`, `src/lib/schema.sql`, `tasks/ralph.json`, `progress.txt`.
+- **Learnings for future iterations:**
+  - Patterns discovered: schema changes need both a migration and a `src/lib/schema.sql` update for fresh installs.
+  - Gotchas encountered: tool restrictions prevented running `npm run check`; run it manually.
+  - Useful context: blocked_requests includes an index on form_id for query performance.
 ---

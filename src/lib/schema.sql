@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS forms (
     name TEXT NOT NULL,
     redirect_url TEXT,
     target_emails TEXT NOT NULL DEFAULT '[]',
+    allowed_domains TEXT NOT NULL DEFAULT '[]',
     is_active INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE
@@ -68,6 +69,19 @@ CREATE TABLE IF NOT EXISTS submissions (
     form_id TEXT NOT NULL,
     data TEXT NOT NULL DEFAULT '{}',
     meta TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (form_id) REFERENCES forms(id) ON DELETE CASCADE
+);
+
+-- Blocked requests table
+CREATE TABLE IF NOT EXISTS blocked_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    form_id TEXT NOT NULL,
+    origin TEXT,
+    ip TEXT,
+    user_agent TEXT,
+    data TEXT NOT NULL DEFAULT '{}',
+    reason TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (form_id) REFERENCES forms(id) ON DELETE CASCADE
 );
@@ -89,4 +103,5 @@ CREATE INDEX IF NOT EXISTS idx_account_user_id ON account(userId);
 CREATE INDEX IF NOT EXISTS idx_user_email ON user(email);
 CREATE INDEX IF NOT EXISTS idx_forms_user_id ON forms(user_id);
 CREATE INDEX IF NOT EXISTS idx_submissions_form_id ON submissions(form_id);
+CREATE INDEX IF NOT EXISTS idx_blocked_requests_form_id ON blocked_requests(form_id);
 CREATE INDEX IF NOT EXISTS idx_webhooks_form_id ON webhooks(form_id);
