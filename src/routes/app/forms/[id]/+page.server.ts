@@ -107,6 +107,17 @@ function isValidEmail(email: string): boolean {
 	return emailRegex.test(email);
 }
 
+function normalizeAllowedDomain(domain: string): { normalized: string; error?: string } {
+	const normalized = domain.trim().toLowerCase();
+	if (!normalized) {
+		return { normalized: '', error: 'Domain is required' };
+	}
+	if (/\s/.test(normalized)) {
+		return { normalized: '', error: 'Domain cannot contain spaces' };
+	}
+	return { normalized };
+}
+
 export const actions: Actions = {
 	updateRedirectUrl: async ({ params, locals, request }) => {
 		const user = locals.user;
@@ -197,6 +208,71 @@ export const actions: Actions = {
 		updateStmt.run(JSON.stringify(updatedEmails), params.id);
 
 		return { emailSuccess: true };
+	},
+
+	addAllowedDomain: async ({ params, locals, request }) => {
+		const user = locals.user;
+		if (!user) {
+			throw redirect(302, '/auth/login');
+		}
+
+		const formData = await request.formData();
+		const newDomain = formData.get('new_domain')?.toString() ?? '';
+		const { normalized, error: domainError } = normalizeAllowedDomain(newDomain);
+
+		if (domainError) {
+			return fail(400, { allowedDomainError: domainError });
+		}
+
+		const stmt = db.prepare('SELECT * FROM forms WHERE id = ? AND user_id = ?');
+		const form = stmt.get(params.id, user.id) as Form | undefined;
+		if (!form) {
+			throw error(404, 'Form not found');
+		}
+
+		const currentDomains = JSON.parse(form.allowed_domains) as string[];
+		const normalizedDomains = currentDomains.map((domain) => domain.trim().toLowerCase());
+
+		if (normalizedDomains.includes(normalized)) {
+			return fail(400, { allowedDomainError: 'This domain is already in the list' });
+		}
+
+		const updatedDomains = [...currentDomains, normalized];
+		const updateStmt = db.prepare('UPDATE forms SET allowed_domains = ? WHERE id = ?');
+		updateStmt.run(JSON.stringify(updatedDomains), params.id);
+
+		return { allowedDomainSuccess: true };
+	},
+
+	removeAllowedDomain: async ({ params, locals, request }) => {
+		const user = locals.user;
+		if (!user) {
+			throw redirect(302, '/auth/login');
+		}
+
+		const formData = await request.formData();
+		const domainToRemove = formData.get('domain')?.toString() ?? '';
+		const { normalized, error: domainError } = normalizeAllowedDomain(domainToRemove);
+
+		if (domainError) {
+			return fail(400, { allowedDomainError: domainError });
+		}
+
+		const stmt = db.prepare('SELECT * FROM forms WHERE id = ? AND user_id = ?');
+		const form = stmt.get(params.id, user.id) as Form | undefined;
+		if (!form) {
+			throw error(404, 'Form not found');
+		}
+
+		const currentDomains = JSON.parse(form.allowed_domains) as string[];
+		const updatedDomains = currentDomains.filter(
+			(domain) => domain.trim().toLowerCase() !== normalized
+		);
+
+		const updateStmt = db.prepare('UPDATE forms SET allowed_domains = ? WHERE id = ?');
+		updateStmt.run(JSON.stringify(updatedDomains), params.id);
+
+		return { allowedDomainSuccess: true };
 	},
 
 	addWebhook: async ({ params, locals, request }) => {

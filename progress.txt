@@ -61,3 +61,13 @@ Thread: N/A
   - Gotchas encountered: tool restrictions prevented running `npm run check`; run it manually.
   - Useful context: origin validation uses Origin header with Referer fallback before logging blocked requests.
 ---
+
+## 2026-02-02 04:00 - US-006
+Thread: N/A
+- What was implemented: added allowed domain add/remove actions with normalization, duplicate checks, and persistence.
+- Files changed: `src/routes/app/forms/[id]/+page.server.ts`, `tasks/ralph.json`, `progress.txt`.
+- **Learnings for future iterations:**
+  - Patterns discovered: allowed_domains values are stored as JSON arrays and should be compared using trimmed, lowercased strings.
+  - Gotchas encountered: tool restrictions prevented running `npm run check`; run it manually.
+  - Useful context: allowedDomainError is returned from server actions for validation feedback.
+---
