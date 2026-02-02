@@ -31,6 +31,7 @@ A self-hosted Formspree alternative - multi-tenant form backend with email notif
 | `PORT` | Server port | `3000` |
 | `ORIGIN` | Public URL for CORS and cookies | `http://localhost:3000` |
 | `NODE_ENV` | Environment mode | `development` |
+| `MAILGUN_REGION` | Mailgun API region (`us` or `eu`) | `us` |
 
 ## Development
 

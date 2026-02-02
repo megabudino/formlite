@@ -4,6 +4,7 @@ export interface MailgunConfig {
 	apiKey: string;
 	domain: string;
 	fromEmail: string;
+	region: 'us' | 'eu';
 }
 
 export function isDevelopment(): boolean {
@@ -20,6 +21,7 @@ export function getMailgunConfig(): MailgunConfig | null {
 	const apiKey = env.MAILGUN_API_KEY;
 	const domain = env.MAILGUN_DOMAIN;
 	const fromEmail = env.MAILGUN_FROM_EMAIL;
+	const region = env.MAILGUN_REGION === 'eu' ? 'eu' : 'us';
 
 	if (!apiKey || !domain || !fromEmail) {
 		if (!isDevelopment()) {
@@ -31,7 +33,7 @@ export function getMailgunConfig(): MailgunConfig | null {
 		return null;
 	}
 
-	_mailgunConfig = { apiKey, domain, fromEmail };
+	_mailgunConfig = { apiKey, domain, fromEmail, region };
 	return _mailgunConfig;
 }
 

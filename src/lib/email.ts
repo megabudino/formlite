@@ -46,7 +46,8 @@ async function sendToSingleRecipient(
 		formData.append('h:Reply-To', replyTo);
 	}
 
-	const url = `https://api.mailgun.net/v3/${mailgunConfig.domain}/messages`;
+	const baseUrl = mailgunConfig.region === 'eu' ? 'https://api.eu.mailgun.net' : 'https://api.mailgun.net';
+	const url = `${baseUrl}/v3/${mailgunConfig.domain}/messages`;
 	const auth = Buffer.from(`api:${mailgunConfig.apiKey}`).toString('base64');
 
 	try {
