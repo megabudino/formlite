@@ -63,3 +63,13 @@ Thread: N/A
   - Gotchas encountered: npm run check and browser verification could not be executed due to tool restrictions.
   - Useful context: setup now redirects to /auth/login?setup=success for a success banner.
 ---
+
+## Mon Feb 02 2026 00:00 - US-007
+Thread: N/A
+- What was implemented: added setup/login redirect logic in the server hook based on whether any users exist, while keeping /app protection intact.
+- Files changed: src/hooks.server.ts, tasks/ralph.json, progress.txt
+- **Learnings for future iterations:**
+  - Patterns discovered: N/A
+  - Gotchas encountered: npm run check could not be executed due to tool restrictions; browser verification is still required.
+  - Useful context: setup/login redirects now run through src/hooks.server.ts.
+---

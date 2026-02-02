@@ -107,7 +107,7 @@
         "Verify in browser using dev-browser skill: fresh DB redirects to setup; after user exists, /setup redirects to login"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

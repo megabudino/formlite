@@ -8,6 +8,7 @@ export const auth = betterAuth({
 	database: new Database(DATABASE_PATH),
 	emailAndPassword: {
 		enabled: true,
+		disableSignUp: true,
 		minPasswordLength: 8
 	},
 	session: {
