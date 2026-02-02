@@ -27,4 +27,5 @@ const db = new Proxy({} as Database.Database, {
 	}
 });
 
+export { getDb };
 export default db;
