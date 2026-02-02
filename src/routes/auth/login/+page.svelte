@@ -1,11 +1,13 @@
 <script lang="ts">
 	import { authClient } from '$lib/auth-client';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 
 	let email = $state('');
 	let password = $state('');
 	let error = $state('');
 	let loading = $state(false);
+	let setupSuccess = $derived($page.url.searchParams.get('setup') === 'success');
 
 	async function handleSubmit(e: Event) {
 		e.preventDefault();
@@ -41,6 +43,10 @@
 		<h1>Welcome Back</h1>
 		<p class="subtitle">Log in to your Freeform account</p>
 
+		{#if setupSuccess}
+			<div class="success-message">Account created. Please log in.</div>
+		{/if}
+
 		{#if error}
 			<div class="error-message">{error}</div>
 		{/if}
@@ -75,9 +81,6 @@
 			</button>
 		</form>
 
-		<p class="auth-link">
-			Don't have an account? <a href="/auth/signup">Sign up</a>
-		</p>
 	</div>
 </div>
 
@@ -115,6 +118,16 @@
 		background-color: #fee2e2;
 		border: 1px solid #ef4444;
 		color: #dc2626;
+		padding: 0.75rem;
+		border-radius: 4px;
+		margin-bottom: 1rem;
+		font-size: 0.875rem;
+	}
+
+	.success-message {
+		background-color: #dcfce7;
+		border: 1px solid #22c55e;
+		color: #166534;
 		padding: 0.75rem;
 		border-radius: 4px;
 		margin-bottom: 1rem;
@@ -174,18 +187,4 @@
 		cursor: not-allowed;
 	}
 
-	.auth-link {
-		text-align: center;
-		margin-top: 1.5rem;
-		color: #666;
-	}
-
-	.auth-link a {
-		color: #3b82f6;
-		text-decoration: none;
-	}
-
-	.auth-link a:hover {
-		text-decoration: underline;
-	}
 </style>
