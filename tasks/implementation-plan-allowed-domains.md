@@ -30,17 +30,31 @@
 
 ## User Stories
 
-### IP-001: Add allowed_domains column to forms table
+### IP-001: Create database migrations system
 
-**Description:** As a developer, I want to store allowed domains per form so they persist across sessions.
+**Description:** As a developer, I want a migrations system so schema changes can be applied consistently across all instances.
 
 **Acceptance Criteria:**
-- [ ] Add `allowed_domains TEXT NOT NULL DEFAULT '[]'` column to `forms` table in `src/lib/db.ts` and `src/lib/schema.sql`
-- [ ] Column stores JSON array of domain strings
-- [ ] Existing forms get empty array (allow all behavior)
+- [ ] Create `src/lib/migrations/` directory
+- [ ] Create `src/lib/migrations/index.ts` with `runMigrations(db: Database)` function
+- [ ] Create migrations table: `CREATE TABLE IF NOT EXISTS migrations (id TEXT PRIMARY KEY, applied_at TEXT NOT NULL)`
+- [ ] Migrations are applied in order and tracked to prevent re-running
+- [ ] Call `runMigrations()` from `src/lib/db.ts` after database initialization
 - [ ] Typecheck/lint passes
 
-### IP-002: Create origin validation utility
+### IP-002: Add allowed_domains column and blocked_requests table via migration
+
+**Description:** As a developer, I want to store allowed domains per form and log blocked requests.
+
+**Acceptance Criteria:**
+- [ ] Create `src/lib/migrations/001_add_allowed_domains.ts` migration file
+- [ ] Migration adds `allowed_domains TEXT NOT NULL DEFAULT '[]'` column to `forms` table using `ALTER TABLE`
+- [ ] Migration creates `blocked_requests` table with columns: `id INTEGER PRIMARY KEY AUTOINCREMENT`, `form_id TEXT NOT NULL`, `origin TEXT`, `ip TEXT`, `user_agent TEXT`, `data TEXT NOT NULL DEFAULT '{}'`, `reason TEXT NOT NULL`, `created_at TEXT NOT NULL DEFAULT (datetime('now'))`, `FOREIGN KEY (form_id) REFERENCES forms(id) ON DELETE CASCADE`
+- [ ] Add index on `blocked_requests(form_id)`
+- [ ] Update `src/lib/schema.sql` to include both `allowed_domains` column and `blocked_requests` table for fresh installs
+- [ ] Typecheck/lint passes
+
+### IP-003: Create origin validation utility
 
 **Description:** As a developer, I want a utility function to validate request origins against allowed domains.
 
@@ -54,20 +68,21 @@
 - [ ] Unit tests cover all cases
 - [ ] Typecheck/lint passes
 
-### IP-003: Validate origin on form submission endpoint
+### IP-004: Validate origin on form submission endpoint and log blocked requests
 
-**Description:** As a form owner, I want submissions rejected if they come from non-allowed origins.
+**Description:** As a form owner, I want submissions rejected if they come from non-allowed origins, and blocked requests logged to the database.
 
 **Acceptance Criteria:**
 - [ ] Update `src/routes/s/[form_id]/+server.ts` to check `Origin` header (fallback to `Referer`)
 - [ ] Load `allowed_domains` from form record
+- [ ] If origin not allowed, log to `blocked_requests` table with reason "origin_not_allowed", origin, IP, user agent, and submitted data
 - [ ] If origin not allowed, return 403 with `{ ok: false, error: 'Origin not allowed' }`
 - [ ] If `allowed_domains` is empty, allow all origins (current behavior)
 - [ ] CORS `Access-Control-Allow-Origin` header reflects the validated origin (not `*`) when domains are configured
 - [ ] OPTIONS preflight also validates origin
 - [ ] Typecheck/lint passes
 
-### IP-004: Add allowed domains UI to form settings
+### IP-005: Add allowed domains UI to form settings
 
 **Description:** As a user, I want to manage allowed domains in the form settings page.
 
@@ -80,7 +95,21 @@
 - [ ] Typecheck/lint passes
 - [ ] Verify in browser
 
-### IP-005: Add server actions for allowed domains management
+### IP-008: Add Spam tab to view blocked requests
+
+**Description:** As a user, I want to see blocked requests in a "Spam" tab so I can monitor rejected submissions.
+
+**Acceptance Criteria:**
+- [ ] Add "Spam" tab to the form detail page navigation (after Submissions tab)
+- [ ] Load blocked requests in `+page.server.ts` with pagination (similar to submissions)
+- [ ] Display blocked requests list showing: date, origin, reason, and expandable data
+- [ ] Show empty state when no blocked requests exist
+- [ ] Add "Clear All" button to delete all blocked requests for the form
+- [ ] Add `clearBlockedRequests` server action
+- [ ] Typecheck/lint passes
+- [ ] Verify in browser
+
+### IP-006: Add server actions for allowed domains management
 
 **Description:** As a developer, I want server actions to add/remove allowed domains.
 
@@ -93,7 +122,7 @@
 - [ ] Return form data in load function (`allowedDomains: string[]`)
 - [ ] Typecheck/lint passes
 
-### IP-006: Update Form interface and types
+### IP-007: Update Form interface and types
 
 **Description:** As a developer, I want consistent typing for allowed_domains across the codebase.
 
@@ -110,28 +139,36 @@
 
 ## Technical Plan and Sequencing
 
-1. **Database migration** (IP-001)
-   - Add column to schema files
-   - Handles backward compatibility with default empty array
+1. **Migrations system** (IP-001)
+   - Create reusable migrations infrastructure
+   - Foundation for all future schema changes
 
-2. **Origin validation utility** (IP-002)
+2. **Database migration** (IP-002)
+   - Add allowed_domains column and blocked_requests table via migration
+   - Update schema.sql for fresh installs
+
+3. **Origin validation utility** (IP-003)
    - Pure function, easy to test
    - No dependencies on other changes
 
-3. **Type updates** (IP-006)
+4. **Type updates** (IP-007)
    - Update interfaces before using them
 
-4. **Submission endpoint validation** (IP-003)
-   - Depends on IP-001, IP-002, IP-006
-   - Core security logic
+5. **Submission endpoint validation** (IP-004)
+   - Depends on IP-002, IP-003, IP-007
+   - Core security logic + blocked request logging
 
-5. **Server actions** (IP-005)
-   - Depends on IP-001, IP-006
+6. **Server actions** (IP-006)
+   - Depends on IP-002, IP-007
    - CRUD operations for domains
 
-6. **UI implementation** (IP-004)
-   - Depends on IP-005
-   - Final user-facing piece
+7. **Allowed domains UI** (IP-005)
+   - Depends on IP-006
+   - Settings page for domain management
+
+8. **Spam tab UI** (IP-008)
+   - Depends on IP-002, IP-004
+   - View blocked requests
 
 ## Data & Migration Notes
 
