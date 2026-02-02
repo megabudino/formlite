@@ -1,0 +1,25 @@
+services:
+  freeform:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - freeform-data:/data
+    environment:
+      - NODE_ENV=production
+      - DATABASE_PATH=/data/freeform.db
+      - ORIGIN=http://localhost:3000
+      # Mailgun configuration (required for email notifications)
+      # - MAILGUN_API_KEY=your-api-key
+      # - MAILGUN_DOMAIN=your-domain.mailgun.org
+      # - MAILGUN_FROM_EMAIL=noreply@your-domain.com
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  freeform-data:
