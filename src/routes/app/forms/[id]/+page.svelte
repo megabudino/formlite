@@ -3,20 +3,48 @@
 	import { page } from '$app/stores';
 	import { enhance } from '$app/forms';
 
-	let { data, form }: { data: PageData; form: ActionData } = $props();
-	let activeTab = $state<'integration' | 'submissions' | 'settings'>('integration');
+	type FormActionData = ActionData & { allowedDomainError?: string };
+	
+	type BlockedRequest = {
+		id: number;
+		origin: string | null;
+		reason: string;
+		data: Record<string, unknown>;
+		createdAt: string;
+	};
+
+	type BlockedPagination = {
+		page: number;
+		totalPages: number;
+		totalBlockedRequests: number;
+		hasNextPage: boolean;
+		hasPrevPage: boolean;
+	};
+
+	type FormPageData = PageData & {
+		blockedRequests: BlockedRequest[];
+		blockedPagination: BlockedPagination;
+	};
+
+	let { data, form }: { data: FormPageData; form: FormActionData } = $props();
+	let activeTab = $state<'integration' | 'submissions' | 'spam' | 'settings'>('integration');
 	let copied = $state(false);
 	let redirectUrl = $state(data.form.redirectUrl ?? '');
 	let redirectSaving = $state(false);
 	let redirectSaved = $state(false);
 	let newEmail = $state('');
 	let emailSaving = $state(false);
+	let newDomain = $state('');
+	let domainSaving = $state(false);
+	let spamClearing = $state(false);
+	let spamCleared = $state(false);
 	let newWebhookUrl = $state('');
 	let webhookSaving = $state(false);
 	let revealedSecrets = $state<Set<string>>(new Set());
 	let showDeleteConfirm = $state(false);
 	let deleteConfirmName = $state('');
 	let expandedSubmissions = $state<Set<number>>(new Set());
+	let expandedBlockedRequests = $state<Set<number>>(new Set());
 
 	const actionUrl = $derived(`${$page.url.origin}/s/${data.form.id}`);
 
@@ -72,6 +100,13 @@
 			onclick={() => (activeTab = 'submissions')}
 		>
 			Submissions
+		</button>
+		<button
+			class="tab"
+			class:active={activeTab === 'spam'}
+			onclick={() => (activeTab = 'spam')}
+		>
+			Spam
 		</button>
 		<button
 			class="tab"
@@ -212,6 +247,149 @@
 					{/if}
 				{/if}
 			</div>
+		{:else if activeTab === 'spam'}
+			<div class="section">
+				<div class="section-header">
+					<div>
+						<h2>Spam</h2>
+						<p class="section-description">
+							{#if data.blockedPagination.totalBlockedRequests > 0}
+								{data.blockedPagination.totalBlockedRequests} blocked request{data.blockedPagination.totalBlockedRequests !== 1 ? 's' : ''}.
+							{:else}
+								Review blocked requests for this form.
+							{/if}
+						</p>
+					</div>
+					{#if data.blockedPagination.totalBlockedRequests > 0}
+						<form
+							method="POST"
+							action="?/clearBlockedRequests"
+							use:enhance={() => {
+								spamClearing = true;
+								spamCleared = false;
+								return async ({ update, result }) => {
+									spamClearing = false;
+									if (result.type === 'success') {
+										spamCleared = true;
+										setTimeout(() => {
+											spamCleared = false;
+										}, 3000);
+									}
+									await update();
+								};
+							}}
+							class="clear-blocked-form"
+						>
+							<button
+								type="submit"
+								class="clear-blocked-btn"
+								disabled={spamClearing}
+								onclick={(event) => {
+									if (!confirm('Clear all blocked requests?')) {
+										event.preventDefault();
+									}
+								}}
+							>
+								{#if spamClearing}
+									Clearing...
+								{:else if spamCleared}
+									✓ Cleared
+								{:else}
+									Clear All
+								{/if}
+							</button>
+						</form>
+					{/if}
+				</div>
+
+				{#if data.blockedRequests.length === 0}
+					<div class="empty-state">
+						<p>No blocked requests yet.</p>
+					</div>
+				{:else}
+					<div class="blocked-list">
+						{#each data.blockedRequests as blocked}
+							{@const dataEntries = Object.entries(blocked.data)}
+							{@const isExpanded = expandedBlockedRequests.has(blocked.id)}
+							<div class="blocked-item">
+								<button
+									class="blocked-header"
+									onclick={() => {
+										const newSet = new Set(expandedBlockedRequests);
+										if (isExpanded) {
+											newSet.delete(blocked.id);
+										} else {
+											newSet.add(blocked.id);
+										}
+										expandedBlockedRequests = newSet;
+									}}
+								>
+									<div class="blocked-date">
+										{new Date(blocked.createdAt).toLocaleString()}
+									</div>
+									<div class="blocked-meta">
+										<span class="blocked-origin">
+											{blocked.origin ?? 'Unknown origin'}
+										</span>
+										<span class="blocked-reason">
+											{blocked.reason.replace(/_/g, ' ')}
+										</span>
+									</div>
+									<span class="expand-icon">{isExpanded ? '▼' : '▶'}</span>
+								</button>
+
+								{#if isExpanded}
+									<div class="blocked-details">
+										<h4>Blocked Data</h4>
+										{#if dataEntries.length === 0}
+											<p class="empty-data">No payload captured.</p>
+										{:else}
+											<dl class="data-list">
+												{#each dataEntries as [key, value]}
+													<div class="data-row">
+														<dt>{key}</dt>
+														<dd>{String(value)}</dd>
+													</div>
+												{/each}
+											</dl>
+										{/if}
+									</div>
+								{/if}
+							</div>
+						{/each}
+					</div>
+
+					{#if data.blockedPagination.totalPages > 1}
+						<nav class="pagination">
+							{#if data.blockedPagination.hasPrevPage}
+								<a
+									href="?spam_page={data.blockedPagination.page - 1}"
+									class="pagination-btn"
+								>
+									← Previous
+								</a>
+							{:else}
+								<span class="pagination-btn disabled">← Previous</span>
+							{/if}
+
+							<span class="pagination-info">
+								Page {data.blockedPagination.page} of {data.blockedPagination.totalPages}
+							</span>
+
+							{#if data.blockedPagination.hasNextPage}
+								<a
+									href="?spam_page={data.blockedPagination.page + 1}"
+									class="pagination-btn"
+								>
+									Next →
+								</a>
+							{:else}
+								<span class="pagination-btn disabled">Next →</span>
+							{/if}
+						</nav>
+					{/if}
+				{/if}
+			</div>
 		{:else if activeTab === 'settings'}
 			<div class="section">
 				<h2>Form Settings</h2>
@@ -318,6 +496,73 @@
 						/>
 						<button type="submit" class="add-email-btn" disabled={emailSaving || !newEmail.trim()}>
 							{emailSaving ? 'Adding...' : 'Add Email'}
+						</button>
+					</form>
+				</div>
+
+				<div class="settings-group">
+					<span class="setting-label">Allowed Domains</span>
+					<p class="setting-help">
+						Restrict submissions to specific origins. Leave empty to allow all origins.
+					</p>
+					<p class="setting-help">
+						Supports exact origins, domains, and wildcards. Examples: <code>example.com</code>,
+						<code>https://example.com</code>, <code>*.example.com</code>.
+					</p>
+
+					{#if form?.allowedDomainError}
+						<p class="field-error">{form.allowedDomainError}</p>
+					{/if}
+
+					{#if data.form.allowedDomains.length > 0}
+						<div class="domain-list">
+							{#each data.form.allowedDomains as domain}
+								<div class="domain-tag">
+									<span>{domain}</span>
+									<form
+										method="POST"
+										action="?/removeAllowedDomain"
+										use:enhance={() => {
+											return async ({ update }) => {
+												await update();
+											};
+										}}
+										class="remove-domain-form"
+									>
+										<input type="hidden" name="domain" value={domain} />
+										<button type="submit" class="remove-domain-btn" title="Remove domain">×</button>
+									</form>
+								</div>
+							{/each}
+						</div>
+					{:else}
+						<p class="no-domains">No allowed domains configured.</p>
+					{/if}
+
+					<form
+						method="POST"
+						action="?/addAllowedDomain"
+						use:enhance={() => {
+							domainSaving = true;
+							return async ({ update, result }) => {
+								domainSaving = false;
+								if (result.type === 'success') {
+									newDomain = '';
+								}
+								await update();
+							};
+						}}
+						class="add-domain-form"
+					>
+						<input
+							type="text"
+							name="new_domain"
+							bind:value={newDomain}
+							placeholder="Add domain or origin"
+							class="add-domain-input"
+						/>
+						<button type="submit" class="add-domain-btn" disabled={domainSaving || !newDomain.trim()}>
+							{domainSaving ? 'Adding...' : 'Add Domain'}
 						</button>
 					</form>
 				</div>
@@ -563,6 +808,13 @@
 		font-weight: 600;
 	}
 
+	.section-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: flex-start;
+		gap: 1rem;
+	}
+
 	.section-description {
 		margin: 0 0 1.5rem 0;
 		color: #6b7280;
@@ -676,6 +928,33 @@
 		margin: 0;
 	}
 
+	.clear-blocked-form {
+		flex-shrink: 0;
+	}
+
+	.clear-blocked-btn {
+		padding: 0.5rem 0.875rem;
+		background-color: #fee2e2;
+		border: 1px solid #fecaca;
+		border-radius: 6px;
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: #b91c1c;
+		cursor: pointer;
+		transition: all 0.15s;
+		white-space: nowrap;
+	}
+
+	.clear-blocked-btn:hover:not(:disabled) {
+		background-color: #fecaca;
+		border-color: #fca5a5;
+	}
+
+	.clear-blocked-btn:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
 	.settings-group {
 		margin-bottom: 1.5rem;
 	}
@@ -715,6 +994,15 @@
 		color: #6b7280;
 	}
 
+	.setting-help code {
+		background-color: #f3f4f6;
+		padding: 0.125rem 0.375rem;
+		border-radius: 4px;
+		font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+		font-size: 0.75rem;
+		color: #1f2937;
+	}
+
 	.field-error {
 		margin: 0.375rem 0 0 0;
 		font-size: 0.8125rem;
@@ -746,14 +1034,16 @@
 		cursor: not-allowed;
 	}
 
-	.email-list {
+	.email-list,
+	.domain-list {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 0.5rem;
 		margin-top: 0.5rem;
 	}
 
-	.email-tag {
+	.email-tag,
+	.domain-tag {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.5rem;
@@ -764,11 +1054,13 @@
 		font-size: 0.875rem;
 	}
 
-	.remove-email-form {
+	.remove-email-form,
+	.remove-domain-form {
 		display: inline;
 	}
 
-	.remove-email-btn {
+	.remove-email-btn,
+	.remove-domain-btn {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
@@ -789,13 +1081,15 @@
 		color: #dc2626;
 	}
 
-	.add-email-form {
+	.add-email-form,
+	.add-domain-form {
 		display: flex;
 		gap: 0.5rem;
 		margin-top: 1rem;
 	}
 
-	.add-email-input {
+	.add-email-input,
+	.add-domain-input {
 		flex: 1;
 		padding: 0.5rem 0.75rem;
 		border: 1px solid #d1d5db;
@@ -803,13 +1097,15 @@
 		font-size: 0.875rem;
 	}
 
-	.add-email-input:focus {
+	.add-email-input:focus,
+	.add-domain-input:focus {
 		outline: none;
 		border-color: #3b82f6;
 		box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 	}
 
-	.add-email-btn {
+	.add-email-btn,
+	.add-domain-btn {
 		padding: 0.5rem 1rem;
 		background-color: #10b981;
 		color: white;
@@ -822,11 +1118,13 @@
 		white-space: nowrap;
 	}
 
-	.add-email-btn:hover:not(:disabled) {
+	.add-email-btn:hover:not(:disabled),
+	.add-domain-btn:hover:not(:disabled) {
 		background-color: #059669;
 	}
 
-	.add-email-btn:disabled {
+	.add-email-btn:disabled,
+	.add-domain-btn:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
 	}
@@ -930,7 +1228,8 @@
 		border-color: #f87171;
 	}
 
-	.no-webhooks {
+	.no-webhooks,
+	.no-domains {
 		margin: 0.75rem 0 0 0;
 		font-size: 0.875rem;
 		color: #9ca3af;
@@ -1091,7 +1390,20 @@
 		margin-top: 1rem;
 	}
 
+	.blocked-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		margin-top: 1rem;
+	}
+
 	.submission-item {
+		border: 1px solid #e5e7eb;
+		border-radius: 6px;
+		overflow: hidden;
+	}
+
+	.blocked-item {
 		border: 1px solid #e5e7eb;
 		border-radius: 6px;
 		overflow: hidden;
@@ -1110,8 +1422,25 @@
 		transition: background-color 0.15s;
 	}
 
+	.blocked-header {
+		width: 100%;
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		padding: 0.75rem 1rem;
+		background-color: #fef2f2;
+		border: none;
+		text-align: left;
+		cursor: pointer;
+		transition: background-color 0.15s;
+	}
+
 	.submission-header:hover {
 		background-color: #f3f4f6;
+	}
+
+	.blocked-header:hover {
+		background-color: #fee2e2;
 	}
 
 	.submission-date {
@@ -1119,6 +1448,38 @@
 		font-size: 0.75rem;
 		color: #6b7280;
 		min-width: 130px;
+	}
+
+	.blocked-date {
+		flex-shrink: 0;
+		font-size: 0.75rem;
+		color: #6b7280;
+		min-width: 130px;
+	}
+
+	.blocked-meta {
+		flex: 1;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem;
+		min-width: 0;
+	}
+
+	.blocked-origin {
+		font-size: 0.875rem;
+		color: #1f2937;
+		font-weight: 500;
+		word-break: break-all;
+	}
+
+	.blocked-reason {
+		font-size: 0.75rem;
+		font-weight: 500;
+		color: #b91c1c;
+		background-color: #fee2e2;
+		padding: 0.125rem 0.5rem;
+		border-radius: 9999px;
 	}
 
 	.submission-preview {
@@ -1167,6 +1528,12 @@
 		background-color: white;
 	}
 
+	.blocked-details {
+		padding: 1rem;
+		border-top: 1px solid #e5e7eb;
+		background-color: white;
+	}
+
 	.submission-details h4 {
 		margin: 0 0 0.5rem 0;
 		font-size: 0.875rem;
@@ -1174,7 +1541,18 @@
 		color: #374151;
 	}
 
+	.blocked-details h4 {
+		margin: 0 0 0.5rem 0;
+		font-size: 0.875rem;
+		font-weight: 600;
+		color: #374151;
+	}
+
 	.submission-details h4:not(:first-child) {
+		margin-top: 1rem;
+	}
+
+	.blocked-details h4:not(:first-child) {
 		margin-top: 1rem;
 	}
 
@@ -1202,6 +1580,13 @@
 		color: #1f2937;
 		font-size: 0.875rem;
 		word-break: break-word;
+	}
+
+	.empty-data {
+		margin: 0;
+		font-size: 0.8125rem;
+		color: #9ca3af;
+		font-style: italic;
 	}
 
 	.meta-list {
@@ -1272,7 +1657,17 @@
 			gap: 0.5rem;
 		}
 
+		.blocked-header {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 0.5rem;
+		}
+
 		.submission-date {
+			min-width: auto;
+		}
+
+		.blocked-date {
 			min-width: auto;
 		}
 
@@ -1283,6 +1678,10 @@
 		}
 
 		.submission-header {
+			position: relative;
+		}
+
+		.blocked-header {
 			position: relative;
 		}
 

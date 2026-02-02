@@ -30,6 +30,17 @@ interface Submission {
 	created_at: string;
 }
 
+interface BlockedRequest {
+	id: number;
+	form_id: string;
+	origin: string | null;
+	ip: string | null;
+	user_agent: string | null;
+	data: string;
+	reason: string;
+	created_at: string;
+}
+
 function isValidUrl(url: string): boolean {
 	try {
 		new URL(url);
@@ -70,6 +81,22 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 	);
 	const submissions = submissionsStmt.all(params.id, SUBMISSIONS_PER_PAGE, offset) as Submission[];
 
+	const spamPage = Math.max(1, parseInt(url.searchParams.get('spam_page') || '1', 10));
+	const spamOffset = (spamPage - 1) * SUBMISSIONS_PER_PAGE;
+
+	const blockedCountStmt = db.prepare('SELECT COUNT(*) as count FROM blocked_requests WHERE form_id = ?');
+	const { count: totalBlockedRequests } = blockedCountStmt.get(params.id) as { count: number };
+	const blockedTotalPages = Math.ceil(totalBlockedRequests / SUBMISSIONS_PER_PAGE);
+
+	const blockedStmt = db.prepare(
+		'SELECT * FROM blocked_requests WHERE form_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?'
+	);
+	const blockedRequests = blockedStmt.all(
+		params.id,
+		SUBMISSIONS_PER_PAGE,
+		spamOffset
+	) as BlockedRequest[];
+
 	return {
 		form: {
 			id: form.id,
@@ -92,12 +119,26 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 			meta: JSON.parse(s.meta) as Record<string, unknown>,
 			createdAt: s.created_at
 		})),
+		blockedRequests: blockedRequests.map((blocked) => ({
+			id: blocked.id,
+			origin: blocked.origin,
+			reason: blocked.reason,
+			data: JSON.parse(blocked.data) as Record<string, unknown>,
+			createdAt: blocked.created_at
+		})),
 		pagination: {
 			page,
 			totalPages,
 			totalSubmissions,
 			hasNextPage: page < totalPages,
 			hasPrevPage: page > 1
+		},
+		blockedPagination: {
+			page: spamPage,
+			totalPages: blockedTotalPages,
+			totalBlockedRequests,
+			hasNextPage: spamPage < blockedTotalPages,
+			hasPrevPage: spamPage > 1
 		}
 	};
 };
@@ -273,6 +314,24 @@ export const actions: Actions = {
 		updateStmt.run(JSON.stringify(updatedDomains), params.id);
 
 		return { allowedDomainSuccess: true };
+	},
+
+	clearBlockedRequests: async ({ params, locals }) => {
+		const user = locals.user;
+		if (!user) {
+			throw redirect(302, '/auth/login');
+		}
+
+		const stmt = db.prepare('SELECT id FROM forms WHERE id = ? AND user_id = ?');
+		const form = stmt.get(params.id, user.id);
+		if (!form) {
+			throw error(404, 'Form not found');
+		}
+
+		const deleteStmt = db.prepare('DELETE FROM blocked_requests WHERE form_id = ?');
+		deleteStmt.run(params.id);
+
+		return { clearBlockedRequestsSuccess: true };
 	},
 
 	addWebhook: async ({ params, locals, request }) => {
