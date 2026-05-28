@@ -1,11 +1,7 @@
-# Build stage
-FROM node:20-slim AS builder
+# --- Shared base: install deps and copy source ---
+FROM node:20-slim AS base
 
-# Build target: "app" (default, adapter-node) or "marketing" (adapter-static)
-ARG DEPLOY_TARGET=app
-ENV DEPLOY_TARGET=${DEPLOY_TARGET}
-
-# Install build dependencies for native modules (better-sqlite3 only needed for app)
+# python3/make/g++ are needed by better-sqlite3 native build (required by package.json)
 RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -15,24 +11,33 @@ RUN npm ci
 
 COPY . .
 
-# Builds either build:marketing or the default build (app) based on DEPLOY_TARGET
-RUN if [ "$DEPLOY_TARGET" = "marketing" ]; then \
-		npm run build:marketing; \
-	else \
-		npm run build; \
-	fi
 
+# --- Builder for the app (adapter-node, SSR + SQLite) ---
+FROM base AS builder-app
+ENV DEPLOY_TARGET=app
+RUN npm run build
 RUN npm prune --production
+
+
+# --- Builder for marketing (adapter-static, prerendered HTML) ---
+FROM base AS builder-marketing
+# Base URL of the app site to which marketing CTAs link (e.g. https://app.example.com).
+# Empty by default → relative paths (only useful when marketing and app share a host).
+ARG PUBLIC_APP_URL=""
+ENV PUBLIC_APP_URL=${PUBLIC_APP_URL}
+ENV DEPLOY_TARGET=marketing
+RUN npm run build:marketing
 
 
 # --- Marketing runtime: nginx serving prerendered static files ---
 FROM nginx:1.27-alpine AS marketing
-COPY --from=builder /app/build /usr/share/nginx/html
+COPY --from=builder-marketing /app/build /usr/share/nginx/html
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
 
 
-# --- App runtime: node + SQLite ---
+# --- App runtime: node + SQLite. Kept as the LAST stage so `docker build .`
+#     without --target keeps producing the app image (backward compatible). ---
 FROM node:20-slim AS app
 
 WORKDIR /app
@@ -40,9 +45,9 @@ WORKDIR /app
 RUN groupadd --gid 1001 nodejs && \
 	useradd --uid 1001 --gid nodejs --shell /bin/bash --create-home nodejs
 
-COPY --from=builder --chown=nodejs:nodejs /app/build ./build
-COPY --from=builder --chown=nodejs:nodejs /app/package.json ./
-COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
+COPY --from=builder-app --chown=nodejs:nodejs /app/build ./build
+COPY --from=builder-app --chown=nodejs:nodejs /app/package.json ./
+COPY --from=builder-app --chown=nodejs:nodejs /app/node_modules ./node_modules
 
 RUN mkdir -p /app/data && chown nodejs:nodejs /app/data
 

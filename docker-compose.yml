@@ -1,6 +1,9 @@
 services:
   freeform:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: app
     ports:
       - "3000:3000"
     volumes:
@@ -9,6 +12,9 @@ services:
       - NODE_ENV=production
       - DATABASE_PATH=/data/freeform.db
       - ORIGIN=http://localhost:3000
+      # Additional origins allowed to log in (comma-separated). Supports wildcards
+      # like https://*.example.com. ORIGIN is always trusted automatically.
+      # - TRUSTED_ORIGINS=https://old-domain.com,https://new-domain.com
       # Mailgun configuration (required for email notifications)
       # - MAILGUN_API_KEY=your-api-key
       # - MAILGUN_DOMAIN=your-domain.mailgun.org

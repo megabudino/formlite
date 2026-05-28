@@ -1,0 +1,19 @@
+services:
+  formlite-marketing:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: marketing
+      args:
+        # Where the app is hosted — used as prefix for marketing CTAs (Log in, Get started, …).
+        # Leave empty if marketing and app share a host.
+        PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
+    ports:
+      - "80:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped

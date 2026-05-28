@@ -1,3 +1,13 @@
+<script lang="ts">
+	import { env } from '$env/dynamic/public';
+
+	// Base URL of the app (e.g. https://app.example.com). When empty, CTAs fall
+	// back to relative paths — useful only when marketing and app share a host.
+	const appUrl = (env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
+	const loginUrl = `${appUrl}/auth/login`;
+	const setupUrl = `${appUrl}/setup`;
+</script>
+
 <svelte:head>
 	<title>Formlite — Self-hosted form backend</title>
 </svelte:head>
@@ -29,13 +39,15 @@
 
 			<nav class="flex items-center gap-3">
 				<a
-					href="/auth/login"
+					href={loginUrl}
+					rel="external"
 					class="rounded-lg px-3 py-2 text-sm font-medium text-ink-700 transition hover:text-ink-900"
 				>
 					Log in
 				</a>
 				<a
-					href="/setup"
+					href={setupUrl}
+					rel="external"
 					class="rounded-lg bg-mint-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-mint-600"
 				>
 					Get started
@@ -68,13 +80,15 @@
 
 			<div class="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
 				<a
-					href="/setup"
+					href={setupUrl}
+					rel="external"
 					class="inline-flex items-center justify-center rounded-lg bg-mint-500 px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-mint-600 hover:shadow"
 				>
 					Create your first form
 				</a>
 				<a
-					href="/auth/login"
+					href={loginUrl}
+					rel="external"
 					class="inline-flex items-center justify-center rounded-lg border border-ink-200 bg-white px-6 py-3 text-base font-semibold text-ink-700 transition hover:border-ink-300 hover:bg-ink-50"
 				>
 					I already have an account
