@@ -51,7 +51,7 @@
 - [ ] Migration adds `allowed_domains TEXT NOT NULL DEFAULT '[]'` column to `forms` table using `ALTER TABLE`
 - [ ] Migration creates `blocked_requests` table with columns: `id INTEGER PRIMARY KEY AUTOINCREMENT`, `form_id TEXT NOT NULL`, `origin TEXT`, `ip TEXT`, `user_agent TEXT`, `data TEXT NOT NULL DEFAULT '{}'`, `reason TEXT NOT NULL`, `created_at TEXT NOT NULL DEFAULT (datetime('now'))`, `FOREIGN KEY (form_id) REFERENCES forms(id) ON DELETE CASCADE`
 - [ ] Add index on `blocked_requests(form_id)`
-- [ ] Update `src/lib/schema.sql` to include both `allowed_domains` column and `blocked_requests` table for fresh installs
+- [ ] Update the shared schema definition in `src/lib/schema.ts` to include both `allowed_domains` and `blocked_requests` for fresh installs
 - [ ] Typecheck/lint passes
 
 ### IP-003: Create origin validation utility
@@ -145,7 +145,7 @@
 
 2. **Database migration** (IP-002)
    - Add allowed_domains column and blocked_requests table via migration
-   - Update schema.sql for fresh installs
+   - Update the shared schema definition for fresh installs
 
 3. **Origin validation utility** (IP-003)
    - Pure function, easy to test
