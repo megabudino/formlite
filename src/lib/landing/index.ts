@@ -1,0 +1,9 @@
+export { default as LandingHeader } from './LandingHeader.svelte';
+export { default as Hero } from './Hero.svelte';
+export { default as PainPoints } from './PainPoints.svelte';
+export { default as Bridge } from './Bridge.svelte';
+export { default as CoreOffer } from './CoreOffer.svelte';
+export { default as Reviews } from './Reviews.svelte';
+export { default as Team } from './Team.svelte';
+export { default as FinalCta } from './FinalCta.svelte';
+export { default as Footer } from './Footer.svelte';

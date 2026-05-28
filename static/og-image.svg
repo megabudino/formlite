@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" fill="none">
+  <rect width="1200" height="630" fill="#0F172A"/>
+  <circle cx="978" cy="126" r="190" fill="#10B981" fill-opacity=".14"/>
+  <circle cx="156" cy="546" r="220" fill="#34D399" fill-opacity=".12"/>
+  <rect x="84" y="84" width="1032" height="462" rx="36" fill="url(#card)"/>
+  <rect x="132" y="138" width="120" height="120" rx="28" fill="#0F172A"/>
+  <path d="M168 179H216" stroke="#6EE7B7" stroke-width="14" stroke-linecap="round"/>
+  <path d="M168 206H202" stroke="#6EE7B7" stroke-width="14" stroke-linecap="round"/>
+  <path d="M168 233H188" stroke="#6EE7B7" stroke-width="14" stroke-linecap="round"/>
+  <circle cx="236" cy="242" r="20" fill="#10B981"/>
+  <path d="M224 242H248" stroke="white" stroke-width="8" stroke-linecap="round"/>
+  <text x="300" y="206" fill="#E2E8F0" font-family="Inter, Arial, sans-serif" font-size="52" font-weight="800">
+    Formlite
+  </text>
+  <text x="132" y="338" fill="white" font-family="Inter, Arial, sans-serif" font-size="76" font-weight="800">
+    The form backend
+  </text>
+  <text x="132" y="420" fill="white" font-family="Inter, Arial, sans-serif" font-size="76" font-weight="800">
+    you actually own.
+  </text>
+  <text x="132" y="494" fill="#CBD5E1" font-family="Inter, Arial, sans-serif" font-size="32" font-weight="500">
+    Open source. Self hosted. Static-site friendly.
+  </text>
+  <defs>
+    <linearGradient id="card" x1="84" y1="84" x2="1116" y2="546" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1E293B"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+  </defs>
+</svg>

@@ -1,0 +1,203 @@
+<script lang="ts">
+	import {
+		LandingHeader,
+		Hero,
+		PainPoints,
+		Bridge,
+		CoreOffer,
+		Team,
+		FinalCta,
+		Footer
+	} from '$lib/landing';
+
+	const siteUrl = 'https://www.formlite.org';
+	const siteName = 'Formlite';
+	const pageTitle = 'Formlite. The form backend you actually own.';
+	const pageDescription =
+		'Formlite is the open source, self hosted alternative to Formspree. Point your HTML form at an endpoint, receive submissions by email and webhook, own your data.';
+	const ogImageUrl = `${siteUrl}/og-image.svg`;
+	const repoUrl = 'https://github.com/megabudino/formlite';
+	const zeromegaUrl = 'https://www.zeromega.it/';
+	const currentYear = new Date().getFullYear();
+	const authorName = 'Davide Ruggeri';
+
+	function serializeJsonLd(data: Record<string, unknown>): string {
+		return JSON.stringify(data).replace(/</g, '\\u003c');
+	}
+
+	const websiteSchema = {
+		'@context': 'https://schema.org',
+		'@type': 'WebSite',
+		name: siteName,
+		url: siteUrl,
+		description: pageDescription,
+		inLanguage: 'en'
+	};
+
+	const softwareSchema = {
+		'@context': 'https://schema.org',
+		'@type': 'SoftwareApplication',
+		name: siteName,
+		url: siteUrl,
+		description: pageDescription,
+		applicationCategory: 'DeveloperApplication',
+		operatingSystem: 'Linux, macOS, Windows',
+		license: 'https://opensource.org/license/mit',
+		codeRepository: repoUrl,
+		image: ogImageUrl,
+		author: {
+			'@type': 'Person',
+			name: authorName,
+			url: zeromegaUrl
+		},
+		publisher: {
+			'@type': 'Organization',
+			name: 'Zeromega',
+			url: zeromegaUrl
+		},
+		offers: {
+			'@type': 'Offer',
+			price: '0',
+			priceCurrency: 'USD'
+		}
+	};
+
+	const jsonLdMarkup = `
+		<script type="application/ld+json">${serializeJsonLd(websiteSchema)}<\/script>
+		<script type="application/ld+json">${serializeJsonLd(softwareSchema)}<\/script>
+	`;
+</script>
+
+<svelte:head>
+	<title>{pageTitle}</title>
+	<meta name="description" content={pageDescription} />
+	<meta
+		name="robots"
+		content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+	/>
+	<meta name="author" content={authorName} />
+	<link rel="canonical" href={siteUrl} />
+	<link rel="alternate" hreflang="en" href={siteUrl} />
+	<link rel="alternate" hreflang="x-default" href={siteUrl} />
+	<link rel="sitemap" type="application/xml" href={`${siteUrl}/sitemap.xml`} />
+
+	<meta property="og:type" content="website" />
+	<meta property="og:locale" content="en_US" />
+	<meta property="og:site_name" content={siteName} />
+	<meta property="og:title" content={pageTitle} />
+	<meta property="og:description" content={pageDescription} />
+	<meta property="og:url" content={siteUrl} />
+	<meta property="og:image" content={ogImageUrl} />
+	<meta property="og:image:alt" content="Formlite marketing preview" />
+
+	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:title" content={pageTitle} />
+	<meta name="twitter:description" content={pageDescription} />
+	<meta name="twitter:image" content={ogImageUrl} />
+	<meta name="twitter:image:alt" content="Formlite marketing preview" />
+
+	{@html jsonLdMarkup}
+</svelte:head>
+
+<div class="min-h-screen bg-white">
+
+<LandingHeader
+	brand="Formlite"
+	cta={{ label: 'View on GitHub', href: repoUrl, external: true }}
+/>
+
+<main>
+
+<Hero
+	eyebrow="Open source · Self hosted · Yours"
+	headline="Forms that just"
+	highlight="work."
+	subhead="Point your HTML form at an endpoint. Submissions land in your inbox and your webhooks. No backend. No JavaScript. No one else owning your data."
+	primaryCta={{ label: 'Get the source on GitHub', href: repoUrl, external: true }}
+	note="MIT licensed · Clone it · Run it · Own every submission"
+/>
+
+<PainPoints
+	eyebrow="Why people end up here"
+	title="The form SaaS bill keeps growing. And the data isn't even yours."
+	items={[
+		{
+			icon: '💸',
+			title: 'Tired of monthly fees',
+			body: "Form SaaS charges per submission, per form, per seat. For a static site that ships one form, the math stops making sense fast."
+		},
+		{
+			icon: '🔐',
+			title: 'Tired of giving away your leads',
+			body: "Your contact requests, job applications, and sales leads live in someone else's database. You want them in yours."
+		},
+		{
+			icon: '🧱',
+			title: 'Tired of "just spin up a backend"',
+			body: "You don't want to write a controller, configure SMTP, store submissions, sign webhooks. You want it to already exist."
+		}
+	]}
+/>
+
+<Bridge
+	quote="Self hosting a form endpoint shouldn't take a weekend. With Formlite it takes ten minutes."
+/>
+
+<CoreOffer
+	eyebrow="The core offer"
+	title="A form endpoint you drop into your HTML. On your server. For free."
+	body="Formlite is a small, fast, multi tenant form backend you self host in a single Docker container. Create a form, point your form action at it, and submissions land in your inbox and your webhooks. Signed. Spam filtered. Stored in your own SQLite database."
+	features={[
+		'Email notifications via Mailgun',
+		'HMAC signed webhooks',
+		'Honeypot spam protection',
+		'Domain allowlist',
+		'Multi workspace. Multi form.',
+		'One container. One volume. Done.'
+	]}
+	primaryCta={{ label: 'Get the source on GitHub', href: repoUrl, external: true }}
+	note="Self hosted only. There is no SaaS to sign up to. That's the entire point."
+/>
+
+<Team
+	eyebrow="Who's behind it"
+	title="Made by a small lab that builds for the web."
+	members={[
+		{
+			name: 'Davide Ruggeri',
+			role: 'Author & maintainer',
+			bio: "Founder of Zeromega, a web technology lab focused on CRO, SEO and GEO. Builds tools, ships sites.",
+			avatarUrl: 'https://www.zeromega.it/images/davide-di-zeromega.webp',
+			link: { label: 'zeromega.it', href: zeromegaUrl }
+		}
+	]}
+/>
+
+<FinalCta
+	eyebrow="Ready when you are"
+	title="Stop renting your form backend."
+	body="Clone the repo. Run one container. Point your form at it. That's the whole onboarding."
+	primaryCta={{ label: 'Get the source on GitHub', href: repoUrl, external: true }}
+	note="MIT licensed · Single Docker image · SQLite included"
+/>
+
+</main>
+
+<Footer
+	tagline="Formlite. The form backend you actually own."
+	byline={{
+		text: 'Crafted by Davide Ruggeri at',
+		linkLabel: 'Zeromega',
+		linkHref: zeromegaUrl
+	}}
+	links={[
+		{ label: 'GitHub', href: repoUrl, external: true },
+		{ label: 'Zeromega', href: zeromegaUrl, external: true }
+	]}
+/>
+
+<p class="mx-auto max-w-6xl px-6 pb-10 text-center font-mono text-xs uppercase tracking-wider text-ink-400">
+	© {currentYear} Davide Ruggeri · Zeromega. A web technology lab specialising in CRO, SEO and GEO.
+</p>
+
+</div>
