@@ -81,7 +81,7 @@
 </script>
 
 <svelte:head>
-	<title>{data.form.name} — Freeform</title>
+	<title>{data.form.name} — Formlite</title>
 </svelte:head>
 
 <div class="mx-auto max-w-4xl space-y-6">

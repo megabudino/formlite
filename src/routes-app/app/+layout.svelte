@@ -42,7 +42,7 @@
 						<path d="M4 18h7" />
 					</svg>
 				</span>
-				Freeform
+				Formlite
 			</a>
 			<button
 				type="button"

@@ -12,7 +12,7 @@
 </script>
 
 <svelte:head>
-	<title>Create new form — Freeform</title>
+	<title>Create new form — Formlite</title>
 </svelte:head>
 
 <div class="mx-auto max-w-2xl space-y-6">

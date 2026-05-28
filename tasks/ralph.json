@@ -1,5 +1,5 @@
 {
-  "project": "Freeform",
+  "project": "Formlite",
   "branchName": "ralph/allowed-domains",
   "description": "Add per-form allowed domains configuration for cross-origin submission validation with CORS/CSRF protection and spam logging",
   "userStories": [

@@ -1,4 +1,4 @@
-# Freeform
+# Formlite
 
 A self-hosted Formspree alternative - multi-tenant form backend with email notifications and webhooks.
 
@@ -102,7 +102,7 @@ docker run -d \
 
 ### Using Docker Compose
 
-The easiest way to run Freeform is with Docker Compose:
+The easiest way to run Formlite is with Docker Compose:
 
 ```bash
 # Edit docker-compose.yml to set your environment variables
@@ -144,7 +144,7 @@ volumes:
 
 ## Data Persistence
 
-Freeform uses SQLite for data storage. The database file is stored at the path specified by `DATABASE_PATH` (default: `/data/freeform.db`).
+Formlite uses SQLite for data storage. The database file is stored at the path specified by `DATABASE_PATH` (default: `/data/freeform.db`).
 
 ### Volume Mount
 

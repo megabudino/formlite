@@ -26,7 +26,7 @@
 </script>
 
 <svelte:head>
-	<title>Organize your forms — Freeform</title>
+	<title>Organize your forms — Formlite</title>
 </svelte:head>
 
 <div class="mx-auto flex max-w-3xl flex-col gap-6">

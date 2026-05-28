@@ -35,7 +35,7 @@
 </script>
 
 <svelte:head>
-	<title>Log In — Freeform</title>
+	<title>Log In — Formlite</title>
 </svelte:head>
 
 <div
@@ -64,12 +64,12 @@
 					<path d="M4 18h7" />
 				</svg>
 			</span>
-			Freeform
+			Formlite
 		</a>
 
 		<div class="rounded-2xl border border-ink-100 bg-white p-8 shadow-card">
 			<h1 class="text-2xl font-bold tracking-tight text-ink-900">Welcome back</h1>
-			<p class="mt-1 text-sm text-ink-500">Log in to your Freeform account</p>
+			<p class="mt-1 text-sm text-ink-500">Log in to your Formlite account</p>
 
 			{#if setupSuccess}
 				<div

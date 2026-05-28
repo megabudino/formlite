@@ -1,5 +1,5 @@
 <svelte:head>
-	<title>Freeform — Self-hosted form backend</title>
+	<title>Formlite — Self-hosted form backend</title>
 </svelte:head>
 
 <div class="min-h-screen bg-gradient-to-b from-white via-mint-50/40 to-white">
@@ -24,7 +24,7 @@
 						<path d="M4 18h7" />
 					</svg>
 				</span>
-				Freeform
+				Formlite
 			</a>
 
 			<nav class="flex items-center gap-3">
@@ -103,7 +103,7 @@
 		<div
 			class="mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 px-6 py-6 text-sm text-ink-500 sm:flex-row"
 		>
-			<p>Freeform — self-hosted form backend.</p>
+			<p>Formlite — self-hosted form backend.</p>
 			<a
 				href="https://github.com"
 				class="font-medium text-ink-600 hover:text-mint-600"

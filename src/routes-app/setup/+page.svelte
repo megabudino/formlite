@@ -22,7 +22,7 @@
 </script>
 
 <svelte:head>
-	<title>Initial Setup — Freeform</title>
+	<title>Initial Setup — Formlite</title>
 </svelte:head>
 
 <div
@@ -51,11 +51,11 @@
 					<path d="M4 18h7" />
 				</svg>
 			</span>
-			Freeform
+			Formlite
 		</a>
 
 		<div class="rounded-2xl border border-ink-100 bg-white p-8 shadow-card">
-			<h1 class="text-2xl font-bold tracking-tight text-ink-900">Set up Freeform</h1>
+			<h1 class="text-2xl font-bold tracking-tight text-ink-900">Set up Formlite</h1>
 			<p class="mt-1 text-sm text-ink-500">Create your admin account to get started</p>
 
 			{#if form?.error}

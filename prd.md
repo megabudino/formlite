@@ -1,8 +1,8 @@
-# PRD: Freeform
+# PRD: Formlite
 
 ## Overview
 
-Freeform is a self-hosted form backend, an alternative to Formspree. It allows collecting submissions from HTML forms, sending email notifications, and triggering webhooks—all under your own control.
+Formlite is a self-hosted form backend, an alternative to Formspree. It allows collecting submissions from HTML forms, sending email notifications, and triggering webhooks—all under your own control.
 
 ## Problem Statement
 
@@ -35,7 +35,7 @@ SaaS form services (Formspree, Formcarry, Basin) come with recurring costs, vend
 
 ## Non-Goals
 
-- Visual form builder (Freeform is backend/API only, users create their own HTML forms)
+- Visual form builder (Formlite is backend/API only, users create their own HTML forms)
 - Advanced submission analytics
 - Multi-provider email support (Mailgun only in v1)
 - Native mobile app

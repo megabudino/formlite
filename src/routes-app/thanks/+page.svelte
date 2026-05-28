@@ -1,5 +1,5 @@
 <svelte:head>
-	<title>Thank you — Freeform</title>
+	<title>Thank you — Formlite</title>
 </svelte:head>
 
 <div

@@ -15,7 +15,7 @@
 </script>
 
 <svelte:head>
-	<title>Workspaces — Freeform</title>
+	<title>Workspaces — Formlite</title>
 </svelte:head>
 
 <div class="space-y-6">
