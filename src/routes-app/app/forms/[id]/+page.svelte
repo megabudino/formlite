@@ -53,7 +53,7 @@
   <textarea name="message" placeholder="Your message" required></textarea>
 
   <!-- Honeypot field - do not remove -->
-  <input type="text" name="_gotcha" style="display:none">
+  <input type="text" name="_gotcha" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px">
 
   <button type="submit">Send</button>
 </form>`);
@@ -661,6 +661,9 @@
 						<code class="rounded bg-ink-100 px-1.5 py-0.5 font-mono text-[11px] text-ink-900"
 							>*.example.com</code
 						>.
+					</p>
+					<p class="mt-1 text-xs text-ink-500">
+						A domain also covers its www. variant. Wildcards match subdomains only.
 					</p>
 
 					{#if form?.allowedDomainError}

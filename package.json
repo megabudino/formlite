@@ -21,7 +21,8 @@
 		"check:marketing": "DEPLOY_TARGET=marketing svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "DEPLOY_TARGET=app svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"db:init": "npx tsx scripts/init-db.ts",
-		"test:migrations": "node --import tsx --test tests/migrations.test.ts"
+		"test:migrations": "node --import tsx --test tests/migrations.test.ts",
+		"test:spam": "node --import tsx --test tests/origin.test.ts tests/rate-limit.test.ts"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-auto": "^7.0.0",
