@@ -496,7 +496,7 @@ export const actions: Actions = {
 		const deleteStmt = db.prepare('DELETE FROM forms WHERE id = ?');
 		deleteStmt.run(params.id);
 
-		const redirectTo = form.workspace_id ? `/app/workspaces/${form.workspace_id}` : '/app';
+		const redirectTo = form.workspace_id ? `/workspaces/${form.workspace_id}` : '/';
 		throw redirect(302, redirectTo);
 	}
 };

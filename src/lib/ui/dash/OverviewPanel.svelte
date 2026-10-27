@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { chart } from '$lib/charts';
-	import { buildSeries, computeDelta, rangeLabel, type Overview } from '$lib/stats';
-	import StatCard from './StatCard.svelte';
+	import { buildSeries, rangeLabel, type Overview } from '$lib/stats';
+	import TrafficCard from './TrafficCard.svelte';
 	import ActivityTable from './ActivityTable.svelte';
 
-	// The overview block shared by the dashboard and a workspace: three stat cards,
-	// traffic trend plus submissions by form, then the latest activity.
+	// A workspace's overview: traffic (with its totals in the header) next to
+	// submissions by form, then the latest activity.
 	let { overview }: { overview: Overview } = $props();
 
 	// Series depend on the viewer's time zone, so they're built in the browser.
@@ -14,79 +14,19 @@
 	onMount(() => (now = new Date()));
 
 	const series = $derived(now ? buildSeries(overview.buckets, overview.range, now) : null);
-	const t = $derived(overview.totals);
 	const topForms = $derived(overview.byForm.slice(0, 12));
-	const hasTraffic = $derived(t.submissions + t.blocked > 0);
 </script>
 
 <div class="grid grid-cols-[minmax(0,1fr)] gap-4">
-	<div class="fl-grid-stats gap-4">
-		<StatCard
-			accent
-			label="Submissions · {overview.range}"
-			value={t.submissions.toLocaleString()}
-			delta={computeDelta(t.submissions, t.submissionsPrev, overview.range)}
-			points={series?.submissions ?? null}
-		/>
-		<StatCard
-			label="Spam blocked · {overview.range}"
-			value={t.blocked.toLocaleString()}
-			delta={computeDelta(t.blocked, t.blockedPrev, overview.range)}
-			goodWhen="down"
-			points={series?.blocked ?? null}
-			slot={4}
-		/>
-		<StatCard
-			label="Forms live"
-			value="{overview.forms.live} of {overview.forms.total}"
-			help={overview.forms.total - overview.forms.live === 0
-				? 'Every form accepts submissions'
-				: `${overview.forms.total - overview.forms.live} paused`}
-		/>
-	</div>
-
 	<div class="fl-grid-split gap-4">
-		<section class="fl-card">
-			<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-				<h2 class="fl-h2">Traffic</h2>
-				<div class="fl-legend">
-					<span><i style="background:var(--chart-1)"></i>Submissions</span>
-					<span><i style="background:var(--chart-4)"></i>Blocked</span>
-				</div>
-			</div>
-			<div class="relative">
-				{#if series}
-					<div
-						class="fl-chart"
-						use:chart={{
-							type: 'trend',
-							options: {
-								labels: series.labels,
-								full: series.full,
-								title: `Submissions and blocked requests, ${rangeLabel(overview.range)}`,
-								series: [
-									{ name: 'Submissions', slot: 1, data: series.submissions },
-									{ name: 'Blocked', slot: 4, data: series.blocked }
-								]
-							}
-						}}
-					></div>
-				{:else}
-					<div class="h-[240px]"></div>
-				{/if}
-				{#if !hasTraffic}
-					<p class="fl-subtle pointer-events-none absolute inset-x-0 top-[38%] m-0 text-center text-sm">
-						Nothing in the {rangeLabel(overview.range)}
-					</p>
-				{/if}
-			</div>
-		</section>
+		<TrafficCard totals={overview.totals} range={overview.range} {series} />
 
-		<section class="fl-card">
-			<h2 class="fl-h2 mb-4">Submissions by form</h2>
+		<section class="fl-card flex flex-col">
+			<h2 class="fl-h2">Submissions by form</h2>
+			<p class="fl-subtle m-0 mb-4 mt-1 text-sm">{rangeLabel(overview.range)}</p>
 			{#if topForms.length > 0 && now}
 				<div
-					class="fl-chart"
+					class="fl-chart fl-chart--fill"
 					use:chart={{
 						type: 'bars',
 						options: {
@@ -99,7 +39,7 @@
 					}}
 				></div>
 			{:else}
-				<div class="h-[240px]"></div>
+				<div class="min-h-[220px] flex-1"></div>
 			{/if}
 		</section>
 	</div>

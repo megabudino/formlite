@@ -117,6 +117,30 @@ select.fl-input {
 	font-size: 13px;
 }
 
+/* Fill mode: the chart stretches to the height its card offers (cards in a row share a height).
+   The SVG is taken out of flow so it never pushes the card taller than its neighbours. */
+.fl-chart--fill {
+	position: relative;
+	flex: 1 1 auto;
+	min-height: 220px;
+}
+.fl-chart--fill > svg {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+}
+.fl-heat--fill {
+	flex: 1 1 auto;
+	min-height: 160px;
+	grid-template-rows: repeat(7, minmax(0, 1fr));
+}
+.fl-heat--fill .c {
+	aspect-ratio: auto;
+	height: 100%;
+	min-height: 10px;
+}
+
 /* Chart tooltips size to their content instead of wrapping near the right edge */
 .fl-tip {
 	width: max-content;

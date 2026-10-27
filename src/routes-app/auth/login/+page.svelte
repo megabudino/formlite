@@ -27,7 +27,7 @@
 				return;
 			}
 
-			goto('/app');
+			goto('/');
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'An unexpected error occurred';
 			loading = false;

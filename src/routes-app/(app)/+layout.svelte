@@ -31,7 +31,7 @@
 <div class="flex min-h-screen flex-col bg-bg">
 	<header class="sticky top-0 z-20 border-b border-line bg-surface/90 backdrop-blur">
 		<div class="mx-auto flex h-[68px] max-w-[1200px] items-center justify-between gap-4 px-4 sm:px-6">
-			<Brand href="/app" />
+			<Brand href="/" />
 			<div class="flex items-center gap-1 sm:gap-2">
 				<ThemeToggle />
 				{#if data.user}

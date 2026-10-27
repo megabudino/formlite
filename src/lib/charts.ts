@@ -37,6 +37,16 @@ function makeTip(box: HTMLElement): HTMLDivElement {
 	return t;
 }
 
+/** Left gutter just wide enough for the longest y-axis tick (11px mono ≈ 6.6px per char). */
+function gutter(max: number): number {
+	return Math.ceil(fmt(max).length * 6.6) + 10;
+}
+
+/** In a .fl-chart--fill box the chart takes the box's height; otherwise the default 240px. */
+function fillHeight(box: HTMLElement): number {
+	return box.classList.contains('fl-chart--fill') && box.clientHeight > 0 ? box.clientHeight : 240;
+}
+
 /** Position the tooltip above (x, y) in box pixels, kept inside the box horizontally. */
 function placeTip(tip: HTMLDivElement, box: HTMLElement, x: number, y: number) {
 	tip.classList.add('on');
@@ -48,13 +58,17 @@ function placeTip(tip: HTMLDivElement, box: HTMLElement, x: number, y: number) {
 
 /** Re-draw when the container's width changes. Returns a cleanup function. */
 function live(box: HTMLElement, draw: () => void): () => void {
-	let last = box.clientWidth;
+	let lastW = box.clientWidth;
+	let lastH = box.clientHeight;
 	box.innerHTML = '';
 	draw();
+	// Width and height both matter: fill-mode charts take the height their card gives them.
 	const ro = new ResizeObserver(() => {
 		const w = box.clientWidth;
-		if (w && Math.abs(w - last) > 4) {
-			last = w;
+		const h = box.clientHeight;
+		if (w && (Math.abs(w - lastW) > 4 || Math.abs(h - lastH) > 4)) {
+			lastW = w;
+			lastH = h;
 			box.innerHTML = '';
 			draw();
 		}
@@ -107,11 +121,11 @@ export interface TrendOptions {
 
 function trend0(box: HTMLElement, o: TrendOptions) {
 	const w = box.clientWidth || 600;
-	const h = o.height ?? 240;
-	const L = 44, R = 8, T = 12, B = 28;
+	const h = o.height ?? fillHeight(box);
+	const max = nice(Math.max(0, ...o.series.flatMap((s) => s.data)));
+	const L = gutter(max), R = 8, T = 12, B = 28;
 	const iw = w - L - R, ih = h - T - B;
 	const n = o.labels.length;
-	const max = nice(Math.max(0, ...o.series.flatMap((s) => s.data)));
 	const svg = el('svg', { viewBox: `0 0 ${w} ${h}`, height: h, role: 'img', 'aria-label': o.title ?? 'Trend' }, box);
 	const x = (i: number) => L + (n > 1 ? (i * iw) / (n - 1) : iw / 2);
 	const y = (v: number) => T + ih * (1 - v / max);
@@ -187,11 +201,11 @@ export interface BarOptions {
 
 function bars0(box: HTMLElement, o: BarOptions) {
 	const w = box.clientWidth || 600;
-	const h = o.height ?? 240;
-	const L = 44, T = 12, B = 28;
+	const h = o.height ?? fillHeight(box);
+	const max = nice(Math.max(0, ...o.data));
+	const L = gutter(max), T = 12, B = 28;
 	const iw = w - L, ih = h - T - B;
 	const n = o.data.length;
-	const max = nice(Math.max(0, ...o.data));
 	const svg = el('svg', { viewBox: `0 0 ${w} ${h}`, height: h, role: 'img', 'aria-label': o.title ?? 'Bars' }, box);
 	for (let g = 0; g <= 4; g++) {
 		const gy = T + (ih * g) / 4;
@@ -201,7 +215,7 @@ function bars0(box: HTMLElement, o: BarOptions) {
 		);
 	}
 	const slotW = iw / n;
-	const bw = Math.max(4, Math.min(28, slotW - 2 - slotW * 0.3));
+	const bw = Math.max(4, Math.min(44, slotW * 0.55));
 	const tip = makeTip(box);
 	const rects: SVGPathElement[] = [];
 	const labelEvery = Math.max(1, Math.ceil(n / Math.max(2, Math.floor(iw / 56))));

@@ -160,3 +160,48 @@ export function getOverview(scope: StatsScope, range: RangeKey, latestLimit = 8)
 		lastSubmissionAt: last.at
 	};
 }
+
+export interface WorkspaceActivity {
+	/** All-time submissions across the workspace's forms */
+	total: number;
+	/** Submissions in the last 30 days */
+	recent: number;
+	/** One count per UTC day for the last 30 days, oldest first */
+	daily: number[];
+}
+
+// Small per-workspace summary for the dashboard cards. Days are UTC: close enough for a sparkline.
+export function getWorkspaceActivity(userId: string): Record<string, WorkspaceActivity> {
+	const DAYS = 30;
+	const result: Record<string, WorkspaceActivity> = {};
+
+	const totals = db
+		.prepare(
+			`SELECT f.workspace_id AS ws, COUNT(s.id) AS n
+			FROM forms f JOIN submissions s ON s.form_id = f.id
+			WHERE f.user_id = ? AND f.workspace_id IS NOT NULL
+			GROUP BY f.workspace_id`
+		)
+		.all(userId) as { ws: string; n: number }[];
+	for (const t of totals) result[t.ws] = { total: t.n, recent: 0, daily: new Array(DAYS).fill(0) };
+
+	const days = db
+		.prepare(
+			`SELECT f.workspace_id AS ws,
+				CAST(julianday(date('now')) - julianday(date(s.created_at)) AS INTEGER) AS ago,
+				COUNT(*) AS n
+			FROM forms f JOIN submissions s ON s.form_id = f.id
+			WHERE f.user_id = ? AND f.workspace_id IS NOT NULL
+				AND s.created_at >= date('now', '-${DAYS - 1} days')
+			GROUP BY ws, ago`
+		)
+		.all(userId) as { ws: string; ago: number; n: number }[];
+	for (const d of days) {
+		const entry = result[d.ws];
+		if (!entry || d.ago < 0 || d.ago >= DAYS) continue;
+		entry.daily[DAYS - 1 - d.ago] += d.n;
+		entry.recent += d.n;
+	}
+
+	return result;
+}

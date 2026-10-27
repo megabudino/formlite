@@ -15,7 +15,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	const orphanForms = listOrphanForms(user.id);
 	if (orphanForms.length === 0) {
-		throw redirect(302, '/app');
+		throw redirect(302, '/');
 	}
 
 	const workspaces = listWorkspacesForUser(user.id);
@@ -57,7 +57,7 @@ export const actions: Actions = {
 
 		const orphans = listOrphanForms(user.id);
 		if (orphans.length === 0) {
-			throw redirect(302, '/app');
+			throw redirect(302, '/');
 		}
 
 		const formData = await request.formData();
@@ -78,6 +78,6 @@ export const actions: Actions = {
 			return fail(400, { assignError: result.error });
 		}
 
-		throw redirect(303, '/app');
+		throw redirect(303, '/');
 	}
 };

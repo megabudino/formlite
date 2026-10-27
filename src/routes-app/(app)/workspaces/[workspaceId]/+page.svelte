@@ -7,7 +7,7 @@
 
 	let { data }: { data: PageData } = $props();
 
-	const newFormHref = $derived(`/app/forms/new?workspace_id=${data.workspace.id}`);
+	const newFormHref = $derived(`/forms/new?workspace_id=${data.workspace.id}`);
 	const liveCount = $derived(data.forms.filter((f) => f.is_active === 1).length);
 
 	function countSubmissions(n: number) {
@@ -29,7 +29,7 @@
 
 <div class="grid grid-cols-[minmax(0,1fr)] gap-8">
 	<div>
-		<a href="/app" class="fl-back"><Icon name="chevron-left" size={16} />All workspaces</a>
+		<a href="/" class="fl-back"><Icon name="chevron-left" size={16} />All workspaces</a>
 		<div class="mt-3 flex flex-wrap items-end justify-between gap-4">
 			<div class="min-w-0">
 				<span class="fl-overline">
@@ -75,7 +75,7 @@
 			{#each data.forms as form (form.id)}
 				{@const live = form.is_active === 1}
 				<article class="fl-card fl-card--link flex flex-col !p-0">
-					<a href="/app/forms/{form.id}" class="block flex-1 p-6 text-inherit no-underline">
+					<a href="/forms/{form.id}" class="block flex-1 p-6 text-inherit no-underline">
 						<div class="fl-card__head">
 							<span class="fl-badge {live ? 'fl-badge--live' : 'fl-badge--paused'}">
 								{live ? 'Live' : 'Paused'}

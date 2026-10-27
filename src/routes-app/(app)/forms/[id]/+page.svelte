@@ -2,20 +2,18 @@
 	import type { PageData, ActionData } from './$types';
 	import { page } from '$app/stores';
 	import { enhance } from '$app/forms';
-	import { invalidateAll } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { Icon } from '$lib/ui';
 	import IntegrationGuide from '$lib/ui/IntegrationGuide.svelte';
 	import Inbox from '$lib/ui/Inbox.svelte';
-	import StatCard from '$lib/ui/dash/StatCard.svelte';
+	import TrafficCard from '$lib/ui/dash/TrafficCard.svelte';
 	import RangeSelect from '$lib/ui/dash/RangeSelect.svelte';
 	import { chart } from '$lib/charts';
 	import {
 		buildHeatmap,
 		buildSeries,
-		computeDelta,
 		parseUtc,
-		rangeLabel,
 		timeAgo
 	} from '$lib/stats';
 
@@ -60,7 +58,6 @@
 
 	let activeTab = $state<TabId>(initialTab());
 	let endpointCopied = $state(false);
-	let guideDialog = $state<HTMLDialogElement | null>(null);
 	let firstArrived = $state(false);
 	let now = $state<Date | null>(null);
 	let redirectUrl = $state(data.form.redirectUrl ?? '');
@@ -90,8 +87,10 @@
 
 	onMount(() => {
 		now = new Date();
-		// Old links to ?tab=integration open the guide instead.
-		if ($page.url.searchParams.get('tab') === 'integration' && hasSubmissions) guideDialog?.showModal();
+		// Old links to ?tab=integration go to the guide's own page.
+		if ($page.url.searchParams.get('tab') === 'integration' && hasSubmissions) {
+			goto(`/forms/${data.form.id}/integration`, { replaceState: true });
+		}
 	});
 
 	// While waiting for the first submission, check every few seconds so the page
@@ -139,10 +138,6 @@
 		});
 	}
 
-	function plural(n: number, one: string, many: string) {
-		return `${n.toLocaleString()} ${n === 1 ? one : many}`;
-	}
-
 	function selectTab(id: TabId) {
 		activeTab = id;
 		// Keep the tab in the URL without a navigation, so a reload stays here.
@@ -166,11 +161,11 @@
 	<!-- Header -->
 	<div>
 		{#if data.workspace}
-			<a href="/app/workspaces/{data.workspace.id}" class="fl-back">
+			<a href="/workspaces/{data.workspace.id}" class="fl-back">
 				<Icon name="chevron-left" size={16} />{data.workspace.name}
 			</a>
 		{:else}
-			<a href="/app" class="fl-back"><Icon name="chevron-left" size={16} />All workspaces</a>
+			<a href="/" class="fl-back"><Icon name="chevron-left" size={16} />All workspaces</a>
 		{/if}
 		<div class="mt-3 flex flex-wrap items-end justify-between gap-4">
 			<div class="min-w-0">
@@ -191,22 +186,6 @@
 			{/if}
 		</div>
 
-		{#if hasSubmissions}
-			<div class="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center">
-				<div class="fl-endpoint min-w-0 sm:max-w-[640px] sm:flex-1">
-					<span class="fl-endpoint__verb">POST</span>
-					<span class="fl-endpoint__url" title={actionUrl}>{actionUrl}</span>
-					<button type="button" class="fl-btn fl-btn--primary fl-btn--sm" onclick={copyEndpoint}>
-						<Icon name={endpointCopied ? 'check' : 'copy'} size={16} />
-						{endpointCopied ? 'Copied' : 'Copy'}
-					</button>
-				</div>
-				<button type="button" class="fl-btn fl-btn--secondary" onclick={() => guideDialog?.showModal()}>
-					<Icon name="book" />
-					Integration guide
-				</button>
-			</div>
-		{/if}
 	</div>
 
 	{#if firstArrived}
@@ -232,70 +211,23 @@
 	{:else}
 		<!-- Overview -->
 		<div class="grid grid-cols-[minmax(0,1fr)] gap-4">
-			<div class="fl-grid-stats gap-4">
-				<StatCard
-					accent
-					label="Submissions · {ov.range}"
-					value={ov.totals.submissions.toLocaleString()}
-					delta={computeDelta(ov.totals.submissions, ov.totals.submissionsPrev, ov.range)}
-					points={series?.submissions ?? null}
-				/>
-				<StatCard
-					label="Spam blocked · {ov.range}"
-					value={ov.totals.blocked.toLocaleString()}
-					delta={computeDelta(ov.totals.blocked, ov.totals.blockedPrev, ov.range)}
-					goodWhen="down"
-					points={series?.blocked ?? null}
-					slot={4}
-				/>
-				<StatCard
-					label="Last submission"
-					value={ov.lastSubmissionAt && now ? timeAgo(ov.lastSubmissionAt, now.getTime()) : '—'}
-					help="{plural(data.pagination.totalSubmissions, 'submission', 'submissions')} in total · sent to {plural(
-						data.form.targetEmails.length,
-						'email',
-						'emails'
-					)}{data.webhooks.length ? ` and ${plural(data.webhooks.length, 'webhook', 'webhooks')}` : ''}"
-				/>
-			</div>
-
 			<div class="fl-grid-split gap-4">
-				<section class="fl-card">
-					<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-						<h2 class="fl-h2">Traffic</h2>
-						<div class="fl-legend">
-							<span><i style="background:var(--chart-1)"></i>Submissions</span>
-							<span><i style="background:var(--chart-4)"></i>Blocked</span>
-						</div>
-					</div>
-					{#if series}
-						<div
-							class="fl-chart"
-							use:chart={{
-								type: 'trend',
-								options: {
-									labels: series.labels,
-									full: series.full,
-									title: `Submissions and blocked requests, ${rangeLabel(ov.range)}`,
-									series: [
-										{ name: 'Submissions', slot: 1, data: series.submissions },
-										{ name: 'Blocked', slot: 4, data: series.blocked }
-									]
-								}
-							}}
-						></div>
-					{:else}
-						<div class="h-[240px]"></div>
-					{/if}
-				</section>
+				<TrafficCard
+					totals={ov.totals}
+					range={ov.range}
+					{series}
+					note={ov.lastSubmissionAt && now
+						? `Last submission ${timeAgo(ov.lastSubmissionAt, now.getTime()).toLowerCase()}`
+						: ''}
+				/>
 
-				<section class="fl-card">
+				<section class="fl-card flex flex-col">
 					<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
 						<h2 class="fl-h2">When people write</h2>
 						<span class="fl-overline">Last 30 days</span>
 					</div>
 					{#if heat}
-						<div class="fl-heat" use:chart={{ type: 'heat', options: { rows: heat, days: weekdays } }}></div>
+						<div class="fl-heat fl-heat--fill" use:chart={{ type: 'heat', options: { rows: heat, days: weekdays } }}></div>
 						<div class="mt-3 flex justify-between font-mono text-[11px] text-fg-subtle" style="padding-left:32px">
 							<span>00</span><span>06</span><span>12</span><span>18</span><span>23</span>
 						</div>
@@ -307,7 +239,7 @@
 							></i> More
 						</div>
 					{:else}
-						<div class="h-[200px]"></div>
+						<div class="min-h-[160px] flex-1"></div>
 					{/if}
 				</section>
 			</div>
@@ -779,34 +711,32 @@
 			{/if}
 		</div>
 	</div>
+
+	{#if hasSubmissions}
+		<!-- Endpoint: needed once, so it lives at the bottom -->
+		<section class="fl-card grid gap-4">
+			<div class="flex flex-wrap items-start justify-between gap-3">
+				<div>
+					<h2 class="fl-h3">Form endpoint</h2>
+					<p class="fl-muted m-0 mt-1 text-sm">Point your form's action here with method POST.</p>
+				</div>
+				<a href="/forms/{data.form.id}/integration" class="fl-btn fl-btn--secondary fl-btn--sm">
+					<Icon name="book" size={16} />
+					Integration guide
+				</a>
+			</div>
+			<div class="fl-endpoint">
+				<span class="fl-endpoint__verb">POST</span>
+				<span class="fl-endpoint__url" title={actionUrl}>{actionUrl}</span>
+				<button type="button" class="fl-btn fl-btn--primary fl-btn--sm" onclick={copyEndpoint}>
+					<Icon name={endpointCopied ? 'check' : 'copy'} size={16} />
+					{endpointCopied ? 'Copied' : 'Copy'}
+				</button>
+			</div>
+		</section>
+	{/if}
 </div>
 
-<dialog
-	bind:this={guideDialog}
-	class="fl-dialog"
-	aria-labelledby="guide-title"
-	onclick={(e) => {
-		if (e.target === guideDialog) guideDialog?.close();
-	}}
->
-	<div class="fl-dialog__head">
-		<div>
-			<span class="fl-overline">{data.form.name}</span>
-			<h2 class="fl-h2 mt-1" id="guide-title">Integration guide</h2>
-		</div>
-		<button
-			type="button"
-			class="fl-btn fl-btn--ghost fl-btn--icon fl-btn--sm !w-9"
-			aria-label="Close"
-			onclick={() => guideDialog?.close()}
-		>
-			<Icon name="x" />
-		</button>
-	</div>
-	<div class="fl-dialog__body">
-		<IntegrationGuide {actionUrl} />
-	</div>
-</dialog>
 
 {#snippet pageNav(current: number, total: number, hasPrev: boolean, hasNext: boolean, param: string)}
 	<nav class="flex items-center justify-between gap-4 border-t border-line pt-5" aria-label="Pagination">

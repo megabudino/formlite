@@ -13,7 +13,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const workspaces = listWorkspacesForUser(user.id);
 
 	if (workspaces.length === 0) {
-		throw redirect(302, '/app');
+		throw redirect(302, '/');
 	}
 
 	const queryWorkspaceId = url.searchParams.get('workspace_id') ?? '';
@@ -91,6 +91,6 @@ export const actions: Actions = {
 			});
 		}
 
-		throw redirect(303, `/app/forms/${formId}`);
+		throw redirect(303, `/forms/${formId}`);
 	}
 };

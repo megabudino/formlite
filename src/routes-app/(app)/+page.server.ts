@@ -1,13 +1,13 @@
 import type { PageServerLoad, Actions } from './$types';
 import { fail, redirect } from '@sveltejs/kit';
 import { listWorkspacesForUser, createWorkspace } from '$lib/server/workspaces';
-import { getOverview, parseRange } from '$lib/server/stats';
+import { getWorkspaceActivity } from '$lib/server/stats';
 
-export const load: PageServerLoad = async ({ locals, url }) => {
+export const load: PageServerLoad = async ({ locals }) => {
 	const userId = locals.user?.id;
 
 	if (!userId) {
-		return { workspaces: [], overview: null };
+		return { workspaces: [], activity: {} };
 	}
 
 	const workspaces = listWorkspacesForUser(userId);
@@ -20,7 +20,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			formCount: w.formCount,
 			createdAt: w.createdAt
 		})),
-		overview: getOverview({ userId }, parseRange(url.searchParams.get('range')))
+		activity: getWorkspaceActivity(userId)
 	};
 };
 
@@ -39,6 +39,6 @@ export const actions: Actions = {
 			return fail(400, { workspaceError: result.error, workspaceName: name });
 		}
 
-		throw redirect(303, `/app/workspaces/${result.workspace?.id}`);
+		throw redirect(303, `/workspaces/${result.workspace?.id}`);
 	}
 };

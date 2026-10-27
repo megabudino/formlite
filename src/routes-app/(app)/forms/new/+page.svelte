@@ -9,7 +9,7 @@
 	let workspaceId = $state(form?.workspaceId ?? data.preselectedWorkspaceId);
 	let submitting = $state(false);
 
-	const backHref = $derived(workspaceId ? `/app/workspaces/${workspaceId}` : '/app');
+	const backHref = $derived(workspaceId ? `/workspaces/${workspaceId}` : '/');
 	const backLabel = $derived(
 		data.workspaces.find((w) => w.id === workspaceId)?.name ?? 'All workspaces'
 	);

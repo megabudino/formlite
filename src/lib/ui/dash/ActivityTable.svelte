@@ -15,7 +15,7 @@
 	}
 
 	function hrefFor(item: ActivityItem) {
-		return `/app/forms/${item.formId}?tab=${item.kind === 'blocked' ? 'spam' : 'submissions'}`;
+		return `/forms/${item.formId}?tab=${item.kind === 'blocked' ? 'spam' : 'submissions'}`;
 	}
 </script>
 
