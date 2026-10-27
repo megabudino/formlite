@@ -99,7 +99,7 @@
 	{@html jsonLdMarkup}
 </svelte:head>
 
-<div class="min-h-screen bg-white">
+<div class="min-h-screen overflow-x-clip bg-bg text-fg">
 
 <LandingHeader
 	brand="Formlite"
@@ -122,17 +122,17 @@
 	title="The form SaaS bill keeps growing. And the data isn't even yours."
 	items={[
 		{
-			icon: '💸',
+			icon: 'file',
 			title: 'Tired of monthly fees',
 			body: "Form SaaS charges per submission, per form, per seat. For a static site that ships one form, the math stops making sense fast."
 		},
 		{
-			icon: '🔐',
+			icon: 'shield',
 			title: 'Tired of giving away your leads',
 			body: "Your contact requests, job applications, and sales leads live in someone else's database. You want them in yours."
 		},
 		{
-			icon: '🧱',
+			icon: 'code',
 			title: 'Tired of "just spin up a backend"',
 			body: "You don't want to write a controller, configure SMTP, store submissions, sign webhooks. You want it to already exist."
 		}
@@ -148,12 +148,12 @@
 	title="A form endpoint you drop into your HTML. On your server. For free."
 	body="Formlite is a small, fast, multi tenant form backend you self host in a single Docker container. Create a form, point your form action at it, and submissions land in your inbox and your webhooks. Signed. Spam filtered. Stored in your own SQLite database."
 	features={[
-		'Email notifications via Mailgun',
-		'HMAC signed webhooks',
-		'Honeypot spam protection',
-		'Domain allowlist',
-		'Multi workspace. Multi form.',
-		'One container. One volume. Done.'
+		{ icon: 'mail', label: 'Email notifications via Mailgun' },
+		{ icon: 'webhook', label: 'HMAC signed webhooks' },
+		{ icon: 'shield', label: 'Honeypot spam protection' },
+		{ icon: 'globe', label: 'Domain allowlist' },
+		{ icon: 'folder', label: 'Multi workspace. Multi form.' },
+		{ icon: 'inbox', label: 'One container. One volume. Done.' }
 	]}
 	primaryCta={{ label: 'Get the source on GitHub', href: repoUrl, external: true }}
 	note="Self hosted only. There is no SaaS to sign up to. That's the entire point."
@@ -191,13 +191,10 @@
 		linkHref: zeromegaUrl
 	}}
 	links={[
-		{ label: 'GitHub', href: repoUrl, external: true },
-		{ label: 'Zeromega', href: zeromegaUrl, external: true }
+		{ label: 'GitHub', href: repoUrl, external: true, icon: 'github' },
+		{ label: 'Zeromega', href: zeromegaUrl, external: true, icon: 'globe' }
 	]}
+	legal={`© ${currentYear} Davide Ruggeri · Zeromega. A web technology lab specialising in CRO, SEO and GEO.`}
 />
-
-<p class="mx-auto max-w-6xl px-6 pb-10 text-center font-mono text-xs uppercase tracking-wider text-ink-400">
-	© {currentYear} Davide Ruggeri · Zeromega. A web technology lab specialising in CRO, SEO and GEO.
-</p>
 
 </div>

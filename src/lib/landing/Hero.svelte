@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { Icon } from '$lib/ui';
+
 	type CtaProps = {
 		label: string;
 		href: string;
@@ -13,6 +15,7 @@
 		primaryCta?: CtaProps;
 		secondaryCta?: CtaProps;
 		note?: string;
+		endpoint?: string;
 	};
 
 	let {
@@ -22,82 +25,48 @@
 		subhead,
 		primaryCta,
 		secondaryCta,
-		note
+		note,
+		endpoint = 'https://forms.example.com/s/f_8k2m1q'
 	}: Props = $props();
 </script>
 
 <section class="relative overflow-hidden">
 	<div
-		class="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,var(--color-mint-200),transparent_55%)]"
-	></div>
-	<div
-		class="pointer-events-none absolute inset-x-0 top-0 -z-10 h-px bg-gradient-to-r from-transparent via-mint-300 to-transparent"
-	></div>
-
-	<div class="mx-auto max-w-6xl px-6 pb-24 pt-20 sm:pb-32 sm:pt-28">
-		<div class="mx-auto max-w-4xl text-center">
+		class="mx-auto grid max-w-[1200px] items-center gap-14 px-4 pt-14 pb-20 sm:px-6 sm:pt-20 sm:pb-28 lg:grid-cols-[1.08fr_1fr] lg:gap-16"
+	>
+		<div class="min-w-0">
 			{#if eyebrow}
-				<div class="flex items-center justify-center gap-4">
-					<span class="h-px w-10 bg-mint-500"></span>
-					<span
-						class="font-mono text-xs uppercase tracking-[0.25em] text-mint-700"
-					>
-						{eyebrow}
-					</span>
-					<span class="h-px w-10 bg-mint-500"></span>
-				</div>
+				<span class="fl-badge fl-badge--live">{eyebrow}</span>
 			{/if}
 
 			<h1
-				class="mt-8 text-balance text-6xl font-extrabold leading-[0.95] tracking-tight text-ink-900 sm:text-7xl lg:text-[7.5rem]"
+				class="mt-7 font-display text-[clamp(3.25rem,10vw,5.25rem)] leading-[0.94] font-extrabold tracking-[-0.04em]"
 			>
 				{headline}
 				{#if highlight}
-					{' '}
-					<span class="relative inline-block whitespace-nowrap">
-						<span
-							class="relative z-10 bg-gradient-to-br from-mint-400 via-mint-500 to-mint-700 bg-clip-text text-transparent"
-							>{highlight}</span
-						>
-						<span
-							class="absolute inset-x-0 bottom-1 -z-0 h-3 bg-mint-300/70 sm:h-4 lg:h-5"
-						></span>
-					</span>
+					{' '}<span
+						class="inline-block -rotate-2 rounded-[0.2em] bg-accent px-[0.14em] pb-[0.04em] whitespace-nowrap text-on-accent"
+						>{highlight}</span
+					>
 				{/if}
 			</h1>
 
-			<p
-				class="mx-auto mt-8 max-w-2xl text-balance text-xl leading-relaxed text-ink-700 sm:text-2xl"
-			>
+			<p class="mt-7 max-w-xl text-lg leading-relaxed text-fg-muted sm:text-xl sm:leading-relaxed">
 				{subhead}
 			</p>
 
 			{#if primaryCta || secondaryCta}
-				<div
-					class="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4"
-				>
+				<div class="mt-9 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
 					{#if primaryCta}
 						<a
 							href={primaryCta.href}
 							target={primaryCta.external ? '_blank' : undefined}
 							rel={primaryCta.external ? 'noopener' : undefined}
-							class="group inline-flex items-center justify-center gap-2 rounded-lg bg-ink-900 px-7 py-4 text-base font-semibold text-white shadow-lg shadow-ink-900/10 transition hover:-translate-y-0.5 hover:bg-ink-800 hover:shadow-xl hover:shadow-ink-900/20 sm:text-lg"
+							class="fl-btn fl-btn--primary fl-btn--lg group"
 						>
+							<Icon name="github" />
 							{primaryCta.label}
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2.5"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								class="h-4 w-4 transition group-hover:translate-x-0.5"
-								aria-hidden="true"
-							>
-								<path d="M5 12h14" />
-								<path d="m13 5 7 7-7 7" />
-							</svg>
+							<Icon name="arrow-right" class="transition-transform duration-140 group-hover:translate-x-0.5" />
 						</a>
 					{/if}
 					{#if secondaryCta}
@@ -105,7 +74,7 @@
 							href={secondaryCta.href}
 							target={secondaryCta.external ? '_blank' : undefined}
 							rel={secondaryCta.external ? 'noopener' : undefined}
-							class="inline-flex items-center justify-center rounded-lg border-2 border-ink-900 bg-transparent px-7 py-4 text-base font-semibold text-ink-900 transition hover:bg-ink-900 hover:text-white sm:text-lg"
+							class="fl-btn fl-btn--secondary fl-btn--lg"
 						>
 							{secondaryCta.label}
 						</a>
@@ -114,10 +83,68 @@
 			{/if}
 
 			{#if note}
-				<p class="mt-5 font-mono text-xs uppercase tracking-wider text-ink-500">
-					{note}
-				</p>
+				<p class="fl-overline mt-6">{note}</p>
 			{/if}
+		</div>
+
+		<!-- Product glimpse: the endpoint and the snippet, staged on the mark's own shapes -->
+		<div class="relative min-w-0 pt-8 pr-4 pb-10 sm:pt-12 sm:pr-10 sm:pb-14">
+			<div aria-hidden="true">
+				<div class="slab absolute top-0 right-0 h-56 w-[72%] rounded-xl px-7 pt-7 sm:h-64">
+					<div class="fl-bars ml-auto w-[55%] opacity-90">
+						<i class="w-full bg-accent"></i>
+						<i class="w-[70%] bg-accent"></i>
+						<i class="w-[36%] bg-accent"></i>
+					</div>
+				</div>
+				<div class="absolute bottom-0 left-6 h-24 w-28 rounded-lg bg-amber sm:left-10"></div>
+				<div class="absolute right-0 bottom-4 h-14 w-32 rounded-lg bg-accent-tint sm:right-2"></div>
+			</div>
+
+			<div class="fl-card relative !grid grid-cols-1 gap-4 !p-4 !shadow-lift sm:!p-6">
+				<div class="flex items-center justify-between gap-3">
+					<span class="fl-overline">Your endpoint</span>
+					<span class="fl-badge fl-badge--live">Live</span>
+				</div>
+				<div class="fl-endpoint !pr-4">
+					<span class="fl-endpoint__verb">POST</span>
+					<span class="fl-endpoint__url">{endpoint}</span>
+				</div>
+				<div class="fl-codeblock hero-code">
+					<div class="fl-codeblock__bar">
+						<span class="fl-codeblock__name">index.html</span>
+						<span class="flex gap-1.5" aria-hidden="true">
+							<i class="h-2 w-2 rounded-full bg-brand-mint"></i>
+							<i class="h-2 w-2 rounded-full bg-amber"></i>
+						</span>
+					</div>
+					<pre><span class="k">&lt;form</span> action=<span class="s">"{endpoint}"</span>
+      method=<span class="s">"POST"</span><span class="k">&gt;</span>
+  <span class="k">&lt;input</span> type=<span class="s">"email"</span> name=<span class="s">"email"</span> required<span class="k">&gt;</span>
+  <span class="k">&lt;textarea</span> name=<span class="s">"message"</span><span class="k">&gt;&lt;/textarea&gt;</span>
+  <span class="k">&lt;input</span> type=<span class="s">"text"</span> name=<span class="s">"_gotcha"</span> hidden<span class="k">&gt;</span>
+  <span class="k">&lt;button&gt;</span>Send<span class="k">&lt;/button&gt;</span>
+<span class="k">&lt;/form&gt;</span></pre>
+				</div>
+				<div class="flex flex-wrap gap-2">
+					<span class="fl-chip !pr-3"><Icon name="mail" size={16} />Email sent</span>
+					<span class="fl-chip !pr-3"><Icon name="webhook" size={16} />Webhook signed</span>
+					<span class="fl-chip !pr-3"><Icon name="shield" size={16} />Spam filtered</span>
+				</div>
+			</div>
 		</div>
 	</div>
 </section>
+
+<style>
+	.hero-code :global(pre) {
+		scrollbar-width: thin;
+		scrollbar-color: color-mix(in srgb, var(--on-inverse) 30%, transparent) transparent;
+	}
+	.slab {
+		background: var(--brand-forest);
+	}
+	:global([data-theme='dark']) .slab {
+		background: var(--accent-tint);
+	}
+</style>

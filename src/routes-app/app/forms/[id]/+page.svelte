@@ -2,6 +2,7 @@
 	import type { PageData, ActionData } from './$types';
 	import { page } from '$app/stores';
 	import { enhance } from '$app/forms';
+	import { Icon } from '$lib/ui';
 
 	type FormActionData = ActionData & { allowedDomainError?: string };
 
@@ -26,9 +27,25 @@
 		blockedPagination: BlockedPagination;
 	};
 
+	type TabId = 'integration' | 'submissions' | 'spam' | 'settings';
+
 	let { data, form }: { data: FormPageData; form: FormActionData } = $props();
-	let activeTab = $state<'integration' | 'submissions' | 'spam' | 'settings'>('integration');
+
+	// Open the tab the URL points at, so pagination links don't bounce back to "Integration".
+	function initialTab(): TabId {
+		const params = $page.url.searchParams;
+		const tab = params.get('tab');
+		if (tab === 'integration' || tab === 'submissions' || tab === 'spam' || tab === 'settings') {
+			return tab;
+		}
+		if (params.has('spam_page')) return 'spam';
+		if (params.has('page')) return 'submissions';
+		return 'integration';
+	}
+
+	let activeTab = $state<TabId>(initialTab());
 	let copied = $state(false);
+	let endpointCopied = $state(false);
 	let redirectUrl = $state(data.form.redirectUrl ?? '');
 	let redirectSaving = $state(false);
 	let redirectSaved = $state(false);
@@ -58,25 +75,81 @@
   <button type="submit">Send</button>
 </form>`);
 
-	async function copyToClipboard() {
+	function escapeHtml(s: string) {
+		return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+	}
+
+	// Minimal HTML highlighter for the snippet: tags in mint, strings in amber, comments dimmed.
+	const highlightedSnippet = $derived(
+		htmlSnippet.replace(
+			/(<!--[\s\S]*?-->)|(<\/?[a-zA-Z]+)|(\/?>)|("[^"]*")|([^<>"]+)/g,
+			(_m, comment, tagOpen, tagClose, str, text) => {
+				if (comment) return `<span style="opacity:.55">${escapeHtml(comment)}</span>`;
+				if (tagOpen) return `<span class="k">${escapeHtml(tagOpen)}</span>`;
+				if (tagClose) return `<span class="k">${escapeHtml(tagClose)}</span>`;
+				if (str) return `<span class="s">${escapeHtml(str)}</span>`;
+				return escapeHtml(text ?? '');
+			}
+		)
+	);
+
+	async function copyText(text: string, which: 'snippet' | 'endpoint') {
 		try {
-			await navigator.clipboard.writeText(htmlSnippet);
-			copied = true;
-			setTimeout(() => {
-				copied = false;
-			}, 2000);
+			await navigator.clipboard.writeText(text);
+			if (which === 'snippet') {
+				copied = true;
+				setTimeout(() => (copied = false), 2000);
+			} else {
+				endpointCopied = true;
+				setTimeout(() => (endpointCopied = false), 2000);
+			}
 		} catch (err) {
 			console.error('Failed to copy:', err);
 		}
 	}
 
-	const inputClass =
-		'block w-full rounded-lg border border-ink-200 bg-white px-3.5 py-2 text-sm text-ink-900 placeholder:text-ink-400 focus:border-mint-500 focus:outline-none focus:ring-2 focus:ring-mint-500/30';
+	function toggleInSet<T>(set: Set<T>, value: T): Set<T> {
+		const next = new Set(set);
+		if (next.has(value)) next.delete(value);
+		else next.add(value);
+		return next;
+	}
+
+	function formatDateTime(dateStr: string) {
+		return new Date(dateStr).toLocaleString(undefined, {
+			month: 'short',
+			day: 'numeric',
+			year: 'numeric',
+			hour: '2-digit',
+			minute: '2-digit'
+		});
+	}
+
+	function formatDate(dateStr: string) {
+		return new Date(dateStr).toLocaleDateString(undefined, {
+			month: 'short',
+			day: 'numeric',
+			year: 'numeric'
+		});
+	}
+
+	function plural(n: number, one: string, many: string) {
+		return `${n.toLocaleString()} ${n === 1 ? one : many}`;
+	}
+
+	function selectTab(id: TabId) {
+		activeTab = id;
+		// Keep the tab in the URL without a navigation, so a reload stays here.
+		const url = new URL($page.url);
+		url.searchParams.set('tab', id);
+		history.replaceState(history.state, '', url);
+	}
+
 	const tabs = [
-		{ id: 'integration', label: 'Integration' },
-		{ id: 'submissions', label: 'Submissions' },
-		{ id: 'spam', label: 'Spam' },
-		{ id: 'settings', label: 'Settings' }
+		{ id: 'integration', label: 'Integration', icon: 'code' },
+		{ id: 'submissions', label: 'Submissions', icon: 'inbox' },
+		{ id: 'spam', label: 'Spam', icon: 'shield' },
+		{ id: 'settings', label: 'Settings', icon: 'settings' }
 	] as const;
 </script>
 
@@ -84,822 +157,733 @@
 	<title>{data.form.name} — Formlite</title>
 </svelte:head>
 
-<div class="mx-auto max-w-4xl space-y-6">
+<div class="grid grid-cols-[minmax(0,1fr)] gap-8">
+	<!-- Header -->
 	<div>
 		{#if data.workspace}
-			<a
-				href="/app/workspaces/{data.workspace.id}"
-				class="mb-3 inline-flex items-center gap-1 text-sm font-medium text-ink-500 transition hover:text-ink-700"
-			>
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="2"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					class="h-3.5 w-3.5"
-				>
-					<polyline points="15 18 9 12 15 6" />
-				</svg>
-				{data.workspace.name}
+			<a href="/app/workspaces/{data.workspace.id}" class="fl-back">
+				<Icon name="chevron-left" size={16} />{data.workspace.name}
 			</a>
 		{:else}
-			<a
-				href="/app"
-				class="mb-3 inline-flex items-center gap-1 text-sm font-medium text-ink-500 transition hover:text-ink-700"
-			>
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="2"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					class="h-3.5 w-3.5"
-				>
-					<polyline points="15 18 9 12 15 6" />
-				</svg>
-				Back to dashboard
-			</a>
+			<a href="/app" class="fl-back"><Icon name="chevron-left" size={16} />All workspaces</a>
 		{/if}
-		<div class="flex flex-wrap items-center gap-3">
-			<h1 class="text-2xl font-bold tracking-tight text-ink-900 sm:text-3xl">{data.form.name}</h1>
-			<span
-				class="rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider {data
-					.form.isActive
-					? 'bg-mint-100 text-mint-700'
-					: 'bg-ink-100 text-ink-500'}"
-			>
-				{data.form.isActive ? 'Active' : 'Inactive'}
+		<div class="mt-3 flex flex-wrap items-center gap-3">
+			<h1 class="fl-h1 min-w-0 break-words">{data.form.name}</h1>
+			<span class="fl-badge {data.form.isActive ? 'fl-badge--live' : 'fl-badge--paused'}">
+				{data.form.isActive ? 'Live' : 'Paused'}
 			</span>
+		</div>
+		<p class="fl-muted mt-1.5 text-sm">
+			Created {formatDate(data.form.createdAt)}{data.form.isActive
+				? ''
+				: ' · Not accepting submissions right now'}
+		</p>
+
+		<div class="fl-endpoint mt-5 max-w-[720px]">
+			<span class="fl-endpoint__verb">POST</span>
+			<span class="fl-endpoint__url" title={actionUrl}>{actionUrl}</span>
+			<button
+				type="button"
+				class="fl-btn fl-btn--primary fl-btn--sm"
+				onclick={() => copyText(actionUrl, 'endpoint')}
+			>
+				<Icon name={endpointCopied ? 'check' : 'copy'} size={16} />
+				{endpointCopied ? 'Copied' : 'Copy'}
+			</button>
 		</div>
 	</div>
 
-	<nav class="flex gap-1 overflow-x-auto border-b border-ink-200">
-		{#each tabs as tab}
-			<button
-				type="button"
-				class="-mb-px whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition {activeTab ===
-				tab.id
-					? 'border-mint-500 text-mint-700'
-					: 'border-transparent text-ink-500 hover:border-ink-200 hover:text-ink-700'}"
-				onclick={() => (activeTab = tab.id)}
-			>
-				{tab.label}
-			</button>
-		{/each}
-	</nav>
+	<!-- Summary -->
+	<div class="fl-grid-stats gap-4">
+		<button
+			type="button"
+			class="fl-card fl-card--accent fl-stat cursor-pointer text-left"
+			onclick={() => selectTab('submissions')}
+		>
+			<span class="fl-overline">Submissions · all time</span>
+			<span class="fl-stat__value fl-stat__value--xl">
+				{data.pagination.totalSubmissions.toLocaleString()}
+			</span>
+			<span class="fl-delta">
+				View inbox <Icon name="arrow-right" size={12} />
+			</span>
+		</button>
+		<button type="button" class="fl-card fl-stat cursor-pointer text-left" onclick={() => selectTab('spam')}>
+			<span class="fl-overline">Spam blocked</span>
+			<span class="fl-stat__value">{data.blockedPagination.totalBlockedRequests.toLocaleString()}</span>
+			<span class="fl-help">Honeypot, origin checks and rate limits</span>
+		</button>
+		<button
+			type="button"
+			class="fl-card fl-stat cursor-pointer text-left"
+			onclick={() => selectTab('settings')}
+		>
+			<span class="fl-overline">Delivery</span>
+			<span class="fl-stat__value">
+				{data.form.targetEmails.length + data.webhooks.length}
+			</span>
+			<span class="fl-help">
+				{plural(data.form.targetEmails.length, 'email', 'emails')} · {plural(
+					data.webhooks.length,
+					'webhook',
+					'webhooks'
+				)}
+			</span>
+		</button>
+	</div>
 
-	<div class="rounded-xl border border-ink-100 bg-white p-6 shadow-card sm:p-8">
-		{#if activeTab === 'integration'}
-			<section>
-				<h2 class="text-lg font-semibold text-ink-900">Integration guide</h2>
-				<p class="mt-1 text-sm text-ink-500">
-					Add this form to your website using the HTML snippet below.
-				</p>
+	<!-- Tabs -->
+	<div class="grid grid-cols-[minmax(0,1fr)] gap-6">
+		<div class="fl-tabs" role="tablist" aria-label="Form sections">
+			{#each tabs as tab (tab.id)}
+				<button
+					type="button"
+					role="tab"
+					id="tab-{tab.id}"
+					aria-selected={activeTab === tab.id}
+					aria-controls="panel-{tab.id}"
+					class="fl-tab"
+					onclick={() => selectTab(tab.id)}
+				>
+					<Icon name={tab.icon} size={16} />
+					{tab.label}
+				</button>
+			{/each}
+		</div>
 
-				<div class="mt-6">
-					<div class="mb-2 flex items-center justify-between">
-						<span class="text-sm font-medium text-ink-700">HTML form snippet</span>
-						<button
-							type="button"
-							onclick={copyToClipboard}
-							class="inline-flex items-center gap-1.5 rounded-md bg-mint-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-mint-600"
-						>
-							{#if copied}
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2.5"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									class="h-3.5 w-3.5"
-								>
-									<polyline points="20 6 9 17 4 12" />
-								</svg>
-								Copied!
-							{:else}
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									class="h-3.5 w-3.5"
-								>
-									<rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-									<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-								</svg>
-								Copy to clipboard
-							{/if}
-						</button>
-					</div>
-					<div class="overflow-x-auto rounded-lg bg-ink-900 p-4">
-						<pre class="m-0"><code class="font-mono text-[13px] leading-relaxed text-ink-100"
-								>{htmlSnippet}</code
-							></pre>
-					</div>
-				</div>
-
-				<div class="mt-8 border-t border-ink-100 pt-6">
-					<h3 class="text-base font-semibold text-ink-900">Form endpoint</h3>
-					<p class="mt-2">
-						<code
-							class="inline-block break-all rounded-md bg-ink-100 px-2.5 py-1 font-mono text-sm text-ink-900"
-							>{actionUrl}</code
-						>
-					</p>
-
-					<h3 class="mt-6 text-base font-semibold text-ink-900">How it works</h3>
-					<ul class="mt-2 list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-ink-600">
-						<li>
-							Point your form's <code class="rounded bg-ink-100 px-1.5 py-0.5 font-mono text-xs text-ink-900">action</code>
-							attribute to the endpoint above
-						</li>
-						<li>
-							Use <code class="rounded bg-ink-100 px-1.5 py-0.5 font-mono text-xs text-ink-900">method="POST"</code>
-							for form submission
-						</li>
-						<li>
-							The <code class="rounded bg-ink-100 px-1.5 py-0.5 font-mono text-xs text-ink-900">_gotcha</code>
-							honeypot field helps prevent spam
-						</li>
-						<li>All form fields will be captured and sent to your target emails</li>
-					</ul>
-				</div>
-			</section>
-		{:else if activeTab === 'submissions'}
-			<section>
-				<h2 class="text-lg font-semibold text-ink-900">Submissions</h2>
-				<p class="mt-1 text-sm text-ink-500">
-					{#if data.pagination.totalSubmissions > 0}
-						{data.pagination.totalSubmissions} submission{data.pagination.totalSubmissions !== 1
-							? 's'
-							: ''} received.
-					{:else}
-						View and manage form submissions.
-					{/if}
-				</p>
-
-				{#if data.submissions.length === 0}
-					<div class="py-12 text-center text-sm text-ink-400">No submissions yet.</div>
-				{:else}
-					<div class="mt-5 flex flex-col gap-2">
-						{#each data.submissions as submission}
-							{@const dataKeys = Object.keys(submission.data)}
-							{@const previewKeys = dataKeys.slice(0, 3)}
-							{@const isExpanded = expandedSubmissions.has(submission.id)}
-							<div class="overflow-hidden rounded-lg border border-ink-100">
+		<div id="panel-{activeTab}" role="tabpanel" aria-labelledby="tab-{activeTab}">
+			{#if activeTab === 'integration'}
+				<section class="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+					<div class="fl-card grid content-start gap-5">
+						<div>
+							<h2 class="fl-h2">Add it to your site</h2>
+							<p class="fl-muted mt-1">Paste this snippet, or point your own form at the endpoint.</p>
+						</div>
+						<div class="fl-codeblock">
+							<div class="fl-codeblock__bar">
+								<span class="fl-codeblock__name">index.html</span>
 								<button
 									type="button"
-									class="flex w-full flex-col items-stretch gap-2 bg-ink-50/60 px-4 py-3 text-left transition hover:bg-ink-100/60 sm:flex-row sm:items-center sm:gap-4"
-									onclick={() => {
-										const newSet = new Set(expandedSubmissions);
-										if (isExpanded) {
-											newSet.delete(submission.id);
-										} else {
-											newSet.add(submission.id);
-										}
-										expandedSubmissions = newSet;
-									}}
+									class="fl-btn fl-btn--sm"
+									style="background:var(--brand-mint);color:var(--brand-forest)"
+									onclick={() => copyText(htmlSnippet, 'snippet')}
 								>
-									<div class="text-xs text-ink-500 sm:min-w-32">
-										{new Date(submission.createdAt).toLocaleString()}
-									</div>
-									<div class="flex min-w-0 flex-1 flex-wrap gap-2">
-										{#each previewKeys as key}
-											<span class="flex max-w-[200px] gap-1 text-sm">
-												<span class="shrink-0 text-ink-500">{key}:</span>
-												<span class="truncate text-ink-800"
-													>{String(submission.data[key]).slice(0, 50)}{String(
-														submission.data[key]
-													).length > 50
-														? '…'
-														: ''}</span
-												>
-											</span>
-										{/each}
-										{#if dataKeys.length > 3}
-											<span class="text-xs italic text-ink-400"
-												>+{dataKeys.length - 3} more</span
-											>
-										{/if}
-									</div>
-									<span class="shrink-0 text-xs text-ink-400">{isExpanded ? '▼' : '▶'}</span>
+									<Icon name={copied ? 'check' : 'copy'} size={16} />
+									{copied ? 'Copied' : 'Copy snippet'}
 								</button>
-
-								{#if isExpanded}
-									<div class="border-t border-ink-100 bg-white p-4">
-										<h4 class="mb-2 text-sm font-semibold text-ink-700">Form data</h4>
-										<dl class="grid gap-2">
-											{#each Object.entries(submission.data) as [key, value]}
-												<div class="flex gap-2 text-sm">
-													<dt class="min-w-20 shrink-0 font-medium text-ink-500">{key}</dt>
-													<dd class="m-0 break-words text-ink-900">{String(value)}</dd>
-												</div>
-											{/each}
-										</dl>
-
-										{#if Object.keys(submission.meta).length > 0}
-											<h4 class="mb-2 mt-4 text-sm font-semibold text-ink-700">Metadata</h4>
-											<dl class="grid gap-2">
-												{#each Object.entries(submission.meta) as [key, value]}
-													<div class="flex gap-2 text-xs">
-														<dt class="min-w-20 shrink-0 font-medium text-ink-500">{key}</dt>
-														<dd class="m-0 break-words text-ink-500">{String(value)}</dd>
-													</div>
-												{/each}
-											</dl>
-										{/if}
-									</div>
-								{/if}
 							</div>
-						{/each}
+							<pre><code>{@html highlightedSnippet}</code></pre>
+						</div>
 					</div>
 
-					{#if data.pagination.totalPages > 1}
-						<nav class="mt-6 flex items-center justify-center gap-4 border-t border-ink-100 pt-4">
-							{#if data.pagination.hasPrevPage}
-								<a
-									href="?page={data.pagination.page - 1}"
-									class="rounded-md border border-ink-200 bg-white px-3 py-1.5 text-sm font-medium text-ink-700 transition hover:bg-ink-50"
-								>
-									← Previous
-								</a>
-							{:else}
-								<span
-									class="cursor-not-allowed rounded-md border border-ink-200 bg-white px-3 py-1.5 text-sm text-ink-300"
-									>← Previous</span
-								>
-							{/if}
-							<span class="text-sm text-ink-500">
-								Page {data.pagination.page} of {data.pagination.totalPages}
-							</span>
-							{#if data.pagination.hasNextPage}
-								<a
-									href="?page={data.pagination.page + 1}"
-									class="rounded-md border border-ink-200 bg-white px-3 py-1.5 text-sm font-medium text-ink-700 transition hover:bg-ink-50"
-								>
-									Next →
-								</a>
-							{:else}
-								<span
-									class="cursor-not-allowed rounded-md border border-ink-200 bg-white px-3 py-1.5 text-sm text-ink-300"
-									>Next →</span
-								>
-							{/if}
-						</nav>
-					{/if}
-				{/if}
-			</section>
-		{:else if activeTab === 'spam'}
-			<section>
-				<div class="flex items-start justify-between gap-4">
+					<div class="fl-card grid content-start gap-5">
+						<h2 class="fl-h2">How it works</h2>
+						<ol class="m-0 grid list-none gap-5 p-0">
+							{#each [
+								{ t: 'Point the action at your endpoint', d: 'Set the form\'s action attribute to the URL above.' },
+								{ t: 'Send it with POST', d: 'Use method="POST". Every named field is captured.' },
+								{ t: 'Keep the honeypot', d: 'Leave the hidden _gotcha field empty. Bots fill it and get blocked.' },
+								{ t: 'Get notified', d: 'Each submission goes to your emails and webhooks.' }
+							] as step, i}
+								<li class="flex gap-3">
+									<span
+										class="grid h-7 w-7 flex-none place-items-center rounded-full bg-accent-tint font-mono text-xs font-medium text-on-accent-tint"
+										>{i + 1}</span
+									>
+									<div>
+										<p class="m-0 text-sm font-semibold">{step.t}</p>
+										<p class="fl-muted m-0 mt-0.5 text-sm">{step.d}</p>
+									</div>
+								</li>
+							{/each}
+						</ol>
+					</div>
+				</section>
+			{:else if activeTab === 'submissions'}
+				<section class="fl-card grid gap-5">
 					<div>
-						<h2 class="text-lg font-semibold text-ink-900">Spam</h2>
-						<p class="mt-1 text-sm text-ink-500">
-							{#if data.blockedPagination.totalBlockedRequests > 0}
-								{data.blockedPagination.totalBlockedRequests} blocked request{data
-									.blockedPagination.totalBlockedRequests !== 1
-									? 's'
-									: ''}.
+						<h2 class="fl-h2">Submissions</h2>
+						<p class="fl-muted mt-1">
+							{#if data.pagination.totalSubmissions > 0}
+								{plural(data.pagination.totalSubmissions, 'submission', 'submissions')} received, newest
+								first.
 							{:else}
-								Review blocked requests for this form.
+								Everything people send through this form shows up here.
 							{/if}
 						</p>
 					</div>
-					{#if data.blockedPagination.totalBlockedRequests > 0}
-						<form
-							method="POST"
-							action="?/clearBlockedRequests"
-							use:enhance={() => {
-								spamClearing = true;
-								spamCleared = false;
-								return async ({ update, result }) => {
-									spamClearing = false;
-									if (result.type === 'success') {
-										spamCleared = true;
-										setTimeout(() => {
-											spamCleared = false;
-										}, 3000);
-									}
-									await update();
-								};
-							}}
-							class="shrink-0"
-						>
-							<button
-								type="submit"
-								disabled={spamClearing}
-								onclick={(event) => {
-									if (!confirm('Clear all blocked requests?')) {
-										event.preventDefault();
-									}
-								}}
-								class="whitespace-nowrap rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
-							>
-								{#if spamClearing}
-									Clearing…
-								{:else if spamCleared}
-									✓ Cleared
-								{:else}
-									Clear all
-								{/if}
-							</button>
-						</form>
-					{/if}
-				</div>
 
-				{#if data.blockedRequests.length === 0}
-					<div class="py-12 text-center text-sm text-ink-400">No blocked requests yet.</div>
-				{:else}
-					<div class="mt-5 flex flex-col gap-2">
-						{#each data.blockedRequests as blocked}
-							{@const dataEntries = Object.entries(blocked.data)}
-							{@const isExpanded = expandedBlockedRequests.has(blocked.id)}
-							<div class="overflow-hidden rounded-lg border border-ink-100">
-								<button
-									type="button"
-									class="flex w-full flex-col items-stretch gap-2 bg-red-50/70 px-4 py-3 text-left transition hover:bg-red-100/60 sm:flex-row sm:items-center sm:gap-4"
-									onclick={() => {
-										const newSet = new Set(expandedBlockedRequests);
-										if (isExpanded) {
-											newSet.delete(blocked.id);
-										} else {
-											newSet.add(blocked.id);
-										}
-										expandedBlockedRequests = newSet;
-									}}
-								>
-									<div class="text-xs text-ink-500 sm:min-w-32">
-										{new Date(blocked.createdAt).toLocaleString()}
-									</div>
-									<div class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-										<span class="break-all text-sm font-medium text-ink-900">
-											{blocked.origin ?? 'Unknown origin'}
-										</span>
-										<span
-											class="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700"
-										>
-											{blocked.reason.replace(/_/g, ' ')}
-										</span>
-									</div>
-									<span class="shrink-0 text-xs text-ink-400">{isExpanded ? '▼' : '▶'}</span>
-								</button>
-
-								{#if isExpanded}
-									<div class="border-t border-ink-100 bg-white p-4">
-										<h4 class="mb-2 text-sm font-semibold text-ink-700">Blocked data</h4>
-										{#if dataEntries.length === 0}
-											<p class="text-xs italic text-ink-400">No payload captured.</p>
-										{:else}
-											<dl class="grid gap-2">
-												{#each dataEntries as [key, value]}
-													<div class="flex gap-2 text-sm">
-														<dt class="min-w-20 shrink-0 font-medium text-ink-500">{key}</dt>
-														<dd class="m-0 break-words text-ink-900">{String(value)}</dd>
-													</div>
-												{/each}
-											</dl>
-										{/if}
-									</div>
-								{/if}
-							</div>
-						{/each}
-					</div>
-
-					{#if data.blockedPagination.totalPages > 1}
-						<nav class="mt-6 flex items-center justify-center gap-4 border-t border-ink-100 pt-4">
-							{#if data.blockedPagination.hasPrevPage}
-								<a
-									href="?spam_page={data.blockedPagination.page - 1}"
-									class="rounded-md border border-ink-200 bg-white px-3 py-1.5 text-sm font-medium text-ink-700 transition hover:bg-ink-50"
-								>
-									← Previous
-								</a>
-							{:else}
-								<span
-									class="cursor-not-allowed rounded-md border border-ink-200 bg-white px-3 py-1.5 text-sm text-ink-300"
-									>← Previous</span
-								>
-							{/if}
-							<span class="text-sm text-ink-500">
-								Page {data.blockedPagination.page} of {data.blockedPagination.totalPages}
-							</span>
-							{#if data.blockedPagination.hasNextPage}
-								<a
-									href="?spam_page={data.blockedPagination.page + 1}"
-									class="rounded-md border border-ink-200 bg-white px-3 py-1.5 text-sm font-medium text-ink-700 transition hover:bg-ink-50"
-								>
-									Next →
-								</a>
-							{:else}
-								<span
-									class="cursor-not-allowed rounded-md border border-ink-200 bg-white px-3 py-1.5 text-sm text-ink-300"
-									>Next →</span
-								>
-							{/if}
-						</nav>
-					{/if}
-				{/if}
-			</section>
-		{:else if activeTab === 'settings'}
-			<section class="space-y-8">
-				<div>
-					<h2 class="text-lg font-semibold text-ink-900">Form settings</h2>
-					<p class="mt-1 text-sm text-ink-500">
-						Configure your form behavior and notifications.
-					</p>
-				</div>
-
-				<form
-					method="POST"
-					action="?/updateRedirectUrl"
-					use:enhance={() => {
-						redirectSaving = true;
-						redirectSaved = false;
-						return async ({ update, result }) => {
-							redirectSaving = false;
-							if (result.type === 'success') {
-								redirectSaved = true;
-								setTimeout(() => {
-									redirectSaved = false;
-								}, 3000);
-							}
-							await update();
-						};
-					}}
-					class="border-b border-ink-100 pb-8"
-				>
-					<label for="redirect_url" class="block text-sm font-semibold text-ink-900">
-						Redirect URL
-					</label>
-					<p class="mt-1 text-xs text-ink-500">
-						Where to send users after form submission. Leave empty for the default thank-you page.
-					</p>
-					<input
-						type="url"
-						id="redirect_url"
-						name="redirect_url"
-						bind:value={redirectUrl}
-						placeholder="https://example.com/thank-you"
-						class={`${inputClass} mt-3`}
-					/>
-					{#if form?.redirectUrlError}
-						<p class="mt-1.5 text-xs text-red-600">{form.redirectUrlError}</p>
-					{/if}
-					<div class="mt-4">
-						<button
-							type="submit"
-							disabled={redirectSaving}
-							class="inline-flex items-center justify-center rounded-md bg-mint-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-mint-600 disabled:cursor-not-allowed disabled:bg-mint-300"
-						>
-							{#if redirectSaving}
-								Saving…
-							{:else if redirectSaved}
-								✓ Saved
-							{:else}
-								Save redirect URL
-							{/if}
-						</button>
-					</div>
-				</form>
-
-				<div class="border-b border-ink-100 pb-8">
-					<span class="block text-sm font-semibold text-ink-900">Target emails</span>
-					<p class="mt-1 text-xs text-ink-500">
-						Submission notifications will be sent to these email addresses.
-					</p>
-
-					{#if form?.emailError}
-						<p class="mt-2 text-xs text-red-600">{form.emailError}</p>
-					{/if}
-
-					<div class="mt-3 flex flex-wrap gap-2">
-						{#each data.form.targetEmails as email}
-							<div
-								class="inline-flex items-center gap-2 rounded-md bg-mint-50 px-2.5 py-1 text-sm text-mint-800 ring-1 ring-inset ring-mint-200"
-							>
-								<span>{email}</span>
-								{#if data.form.targetEmails.length > 1}
-									<form
-										method="POST"
-										action="?/removeEmail"
-										use:enhance={() => {
-											return async ({ update }) => {
-												await update();
-											};
-										}}
-										class="inline"
-									>
-										<input type="hidden" name="email" value={email} />
-										<button
-											type="submit"
-											title="Remove email"
-											class="inline-flex h-5 w-5 items-center justify-center rounded-full text-mint-700 transition hover:bg-red-100 hover:text-red-600"
-										>
-											×
-										</button>
-									</form>
-								{/if}
-							</div>
-						{/each}
-					</div>
-
-					<form
-						method="POST"
-						action="?/addEmail"
-						use:enhance={() => {
-							emailSaving = true;
-							return async ({ update, result }) => {
-								emailSaving = false;
-								if (result.type === 'success') {
-									newEmail = '';
-								}
-								await update();
-							};
-						}}
-						class="mt-4 flex gap-2"
-					>
-						<input
-							type="email"
-							name="new_email"
-							bind:value={newEmail}
-							placeholder="Add email address"
-							class={`${inputClass} flex-1`}
-						/>
-						<button
-							type="submit"
-							disabled={emailSaving || !newEmail.trim()}
-							class="inline-flex items-center justify-center whitespace-nowrap rounded-md bg-mint-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-mint-600 disabled:cursor-not-allowed disabled:bg-mint-300"
-						>
-							{emailSaving ? 'Adding…' : 'Add email'}
-						</button>
-					</form>
-				</div>
-
-				<div class="border-b border-ink-100 pb-8">
-					<span class="block text-sm font-semibold text-ink-900">Allowed domains</span>
-					<p class="mt-1 text-xs text-ink-500">
-						Restrict submissions to specific origins. Leave empty to allow all origins.
-					</p>
-					<p class="mt-1 text-xs text-ink-500">
-						Supports exact origins, domains, and wildcards. Examples:
-						<code class="rounded bg-ink-100 px-1.5 py-0.5 font-mono text-[11px] text-ink-900"
-							>example.com</code
-						>,
-						<code class="rounded bg-ink-100 px-1.5 py-0.5 font-mono text-[11px] text-ink-900"
-							>https://example.com</code
-						>,
-						<code class="rounded bg-ink-100 px-1.5 py-0.5 font-mono text-[11px] text-ink-900"
-							>*.example.com</code
-						>.
-					</p>
-					<p class="mt-1 text-xs text-ink-500">
-						A domain also covers its www. variant. Wildcards match subdomains only.
-					</p>
-
-					{#if form?.allowedDomainError}
-						<p class="mt-2 text-xs text-red-600">{form.allowedDomainError}</p>
-					{/if}
-
-					{#if data.form.allowedDomains.length > 0}
-						<div class="mt-3 flex flex-wrap gap-2">
-							{#each data.form.allowedDomains as domain}
-								<div
-									class="inline-flex items-center gap-2 rounded-md bg-mint-50 px-2.5 py-1 text-sm text-mint-800 ring-1 ring-inset ring-mint-200"
-								>
-									<span>{domain}</span>
-									<form
-										method="POST"
-										action="?/removeAllowedDomain"
-										use:enhance={() => {
-											return async ({ update }) => {
-												await update();
-											};
-										}}
-										class="inline"
-									>
-										<input type="hidden" name="domain" value={domain} />
-										<button
-											type="submit"
-											title="Remove domain"
-											class="inline-flex h-5 w-5 items-center justify-center rounded-full text-mint-700 transition hover:bg-red-100 hover:text-red-600"
-										>
-											×
-										</button>
-									</form>
-								</div>
-							{/each}
+					{#if data.submissions.length === 0}
+						<div class="grid place-items-center rounded-md bg-surface-2 px-6 py-12 text-center">
+							<span class="fl-card__tile"><Icon name="inbox" /></span>
+							<p class="mt-3 font-semibold">No submissions yet</p>
+							<p class="fl-muted mt-1 max-w-xs text-sm">
+								Send a test from your site, or copy the snippet from the Integration tab.
+							</p>
 						</div>
 					{:else}
-						<p class="mt-3 text-xs italic text-ink-400">No allowed domains configured.</p>
-					{/if}
+						<div class="grid gap-2">
+							{#each data.submissions as submission (submission.id)}
+								{@const dataKeys = Object.keys(submission.data)}
+								{@const previewKeys = dataKeys.slice(0, 3)}
+								{@const isExpanded = expandedSubmissions.has(submission.id)}
+								<div class="fl-row" data-open={isExpanded}>
+									<button
+										type="button"
+										class="fl-row__head"
+										aria-expanded={isExpanded}
+										onclick={() => (expandedSubmissions = toggleInSet(expandedSubmissions, submission.id))}
+									>
+										<span class="fl-row__chev"><Icon name="chevron-right" size={16} /></span>
+										<div class="flex min-w-0 flex-1 flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-5">
+											<span class="flex-none font-mono text-xs font-medium text-fg-muted sm:w-40">
+												{formatDateTime(submission.createdAt)}
+											</span>
+											<span class="flex min-w-0 flex-1 flex-wrap gap-x-4 gap-y-1 text-sm">
+												{#each previewKeys as key}
+													<span class="flex min-w-0 max-w-[240px] gap-1.5">
+														<span class="flex-none text-fg-subtle">{key}</span>
+														<span class="truncate">{String(submission.data[key])}</span>
+													</span>
+												{/each}
+												{#if dataKeys.length > 3}
+													<span class="fl-badge fl-badge--off fl-badge--plain">+{dataKeys.length - 3}</span>
+												{/if}
+											</span>
+										</div>
+									</button>
 
-					<form
-						method="POST"
-						action="?/addAllowedDomain"
-						use:enhance={() => {
-							domainSaving = true;
-							return async ({ update, result }) => {
-								domainSaving = false;
-								if (result.type === 'success') {
-									newDomain = '';
-								}
-								await update();
-							};
-						}}
-						class="mt-4 flex gap-2"
-					>
-						<input
-							type="text"
-							name="new_domain"
-							bind:value={newDomain}
-							placeholder="Add domain or origin"
-							class={`${inputClass} flex-1`}
-						/>
-						<button
-							type="submit"
-							disabled={domainSaving || !newDomain.trim()}
-							class="inline-flex items-center justify-center whitespace-nowrap rounded-md bg-mint-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-mint-600 disabled:cursor-not-allowed disabled:bg-mint-300"
-						>
-							{domainSaving ? 'Adding…' : 'Add domain'}
-						</button>
-					</form>
-				</div>
-
-				<div class="border-b border-ink-100 pb-8">
-					<span class="block text-sm font-semibold text-ink-900">Webhooks</span>
-					<p class="mt-1 text-xs text-ink-500">
-						Receive submission data at your own endpoints.
-					</p>
-
-					{#if form?.webhookError}
-						<p class="mt-2 text-xs text-red-600">{form.webhookError}</p>
-					{/if}
-
-					{#if data.webhooks.length > 0}
-						<div class="mt-3 flex flex-col gap-2">
-							{#each data.webhooks as webhook}
-								<div
-									class="flex items-start justify-between gap-3 rounded-lg border border-ink-100 bg-ink-50/60 p-3"
-								>
-									<div class="min-w-0 flex-1">
-										<div class="break-all text-sm font-medium text-ink-900">{webhook.url}</div>
-										<div class="mt-2 flex flex-wrap items-center gap-2">
-											<span class="text-xs text-ink-500">Secret:</span>
-											{#if revealedSecrets.has(webhook.id)}
-												<code
-													class="break-all rounded bg-ink-200 px-2 py-0.5 font-mono text-xs text-ink-900"
-													>{webhook.secret}</code
-												>
-												<button
-													type="button"
-													onclick={() => {
-														const newSet = new Set(revealedSecrets);
-														newSet.delete(webhook.id);
-														revealedSecrets = newSet;
-													}}
-													class="rounded border border-ink-200 px-2 py-0.5 text-xs text-ink-600 transition hover:bg-white"
-												>
-													Hide
-												</button>
-											{:else}
-												<code
-													class="rounded bg-ink-200 px-2 py-0.5 font-mono text-xs text-ink-400"
-													>••••••••••••••••</code
-												>
-												<button
-													type="button"
-													onclick={() => {
-														const newSet = new Set(revealedSecrets);
-														newSet.add(webhook.id);
-														revealedSecrets = newSet;
-													}}
-													class="rounded border border-ink-200 px-2 py-0.5 text-xs text-ink-600 transition hover:bg-white"
-												>
-													Reveal
-												</button>
+									{#if isExpanded}
+										<div class="fl-row__body grid gap-5">
+											<div>
+												<span class="fl-overline">Form data</span>
+												<dl class="fl-dl mt-2">
+													{#each Object.entries(submission.data) as [key, value]}
+														<dt>{key}</dt>
+														<dd>{String(value)}</dd>
+													{/each}
+												</dl>
+											</div>
+											{#if Object.keys(submission.meta).length > 0}
+												<div>
+													<span class="fl-overline">Metadata</span>
+													<dl class="fl-dl mt-2 text-fg-muted">
+														{#each Object.entries(submission.meta) as [key, value]}
+															<dt>{key}</dt>
+															<dd class="font-mono !text-[13px]">{String(value)}</dd>
+														{/each}
+													</dl>
+												</div>
 											{/if}
 										</div>
-									</div>
-									<form
-										method="POST"
-										action="?/deleteWebhook"
-										use:enhance
-										class="shrink-0"
-									>
-										<input type="hidden" name="webhook_id" value={webhook.id} />
-										<button
-											type="submit"
-											title="Delete webhook"
-											class="rounded-md border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-red-700 transition hover:bg-red-50"
-										>
-											Delete
-										</button>
-									</form>
+									{/if}
 								</div>
 							{/each}
 						</div>
-					{:else}
-						<p class="mt-3 text-xs italic text-ink-400">No webhooks configured.</p>
+
+						{#if data.pagination.totalPages > 1}
+							{@render pager(data.pagination.page, data.pagination.totalPages, data.pagination.hasPrevPage, data.pagination.hasNextPage, 'page')}
+						{/if}
+					{/if}
+				</section>
+			{:else if activeTab === 'spam'}
+				<section class="fl-card grid gap-5">
+					<div class="flex flex-wrap items-start justify-between gap-4">
+						<div>
+							<h2 class="fl-h2">Spam</h2>
+							<p class="fl-muted mt-1">
+								{#if data.blockedPagination.totalBlockedRequests > 0}
+									{plural(data.blockedPagination.totalBlockedRequests, 'request', 'requests')} blocked.
+									They never reached your inbox.
+								{:else}
+									Requests that fail the honeypot, origin or rate-limit checks land here.
+								{/if}
+							</p>
+						</div>
+						{#if data.blockedPagination.totalBlockedRequests > 0}
+							<form
+								method="POST"
+								action="?/clearBlockedRequests"
+								use:enhance={() => {
+									spamClearing = true;
+									spamCleared = false;
+									return async ({ update, result }) => {
+										spamClearing = false;
+										if (result.type === 'success') {
+											spamCleared = true;
+											setTimeout(() => {
+												spamCleared = false;
+											}, 3000);
+										}
+										await update();
+									};
+								}}
+							>
+								<button
+									type="submit"
+									disabled={spamClearing}
+									onclick={(event) => {
+										if (!confirm('Clear all blocked requests?')) {
+											event.preventDefault();
+										}
+									}}
+									class="fl-btn fl-btn--danger-soft fl-btn--sm"
+								>
+									<Icon name="trash" size={16} />
+									{#if spamClearing}
+										Clearing…
+									{:else}
+										Clear spam
+									{/if}
+								</button>
+							</form>
+						{/if}
+					</div>
+
+					{#if spamCleared}
+						<div class="fl-alert fl-alert--success" role="status">
+							<Icon name="check-circle" size={20} class="fl-alert__icon" />
+							<div><strong>Spam cleared.</strong> New blocked requests will show up here.</div>
+						</div>
 					{/if}
 
-					<form
-						method="POST"
-						action="?/addWebhook"
-						use:enhance={() => {
-							webhookSaving = true;
-							return async ({ update, result }) => {
-								webhookSaving = false;
-								if (result.type === 'success') {
-									newWebhookUrl = '';
-								}
-								await update();
-							};
-						}}
-						class="mt-4 flex gap-2"
-					>
-						<input
-							type="url"
-							name="webhook_url"
-							bind:value={newWebhookUrl}
-							placeholder="https://example.com/webhook"
-							class={`${inputClass} flex-1`}
-						/>
-						<button
-							type="submit"
-							disabled={webhookSaving || !newWebhookUrl.trim()}
-							class="inline-flex items-center justify-center whitespace-nowrap rounded-md bg-mint-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-mint-600 disabled:cursor-not-allowed disabled:bg-mint-300"
-						>
-							{webhookSaving ? 'Adding…' : 'Add webhook'}
-						</button>
-					</form>
-				</div>
-
-				<div class="rounded-xl border-2 border-red-100 bg-red-50/40 p-5">
-					<span class="block text-sm font-semibold text-red-700">Danger zone</span>
-					<p class="mt-1 text-xs text-red-600/80">
-						Permanently delete this form and all its data.
-					</p>
-
-					{#if !showDeleteConfirm}
-						<button
-							type="button"
-							onclick={() => {
-								showDeleteConfirm = true;
-							}}
-							class="mt-3 inline-flex items-center justify-center rounded-md border border-red-200 bg-white px-3.5 py-1.5 text-sm font-semibold text-red-700 transition hover:bg-red-50"
-						>
-							Delete form
-						</button>
+					{#if data.blockedRequests.length === 0}
+						<div class="grid place-items-center rounded-md bg-surface-2 px-6 py-12 text-center">
+							<span class="fl-card__tile"><Icon name="shield" /></span>
+							<p class="mt-3 font-semibold">No blocked requests</p>
+							<p class="fl-muted mt-1 max-w-xs text-sm">Nothing suspicious so far.</p>
+						</div>
 					{:else}
-						<div class="mt-3 rounded-lg border border-red-200 bg-white p-4">
-							<p class="text-sm text-red-800">
-								This will permanently delete <strong>{data.form.name}</strong> and all its
-								submissions and webhooks.
-							</p>
-							<p class="mt-3 text-sm text-ink-600">
-								Type <strong class="text-ink-900">{data.form.name}</strong> to confirm:
-							</p>
-							<input
-								type="text"
-								bind:value={deleteConfirmName}
-								placeholder="Form name"
-								class="mt-2 block w-full rounded-md border border-red-200 bg-white px-3.5 py-2 text-sm text-ink-900 placeholder:text-ink-400 focus:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-300/40"
-							/>
-							<div class="mt-4 flex gap-2">
-								<button
-									type="button"
-									onclick={() => {
-										showDeleteConfirm = false;
-										deleteConfirmName = '';
-									}}
-									class="inline-flex items-center justify-center rounded-md border border-ink-200 bg-white px-3.5 py-1.5 text-sm font-medium text-ink-700 transition hover:bg-ink-50"
-								>
-									Cancel
-								</button>
-								<form method="POST" action="?/deleteForm" use:enhance>
+						<div class="grid gap-2">
+							{#each data.blockedRequests as blocked (blocked.id)}
+								{@const dataEntries = Object.entries(blocked.data)}
+								{@const isExpanded = expandedBlockedRequests.has(blocked.id)}
+								<div class="fl-row" data-open={isExpanded}>
 									<button
-										type="submit"
-										disabled={deleteConfirmName !== data.form.name}
-										class="inline-flex items-center justify-center rounded-md bg-red-600 px-3.5 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+										type="button"
+										class="fl-row__head"
+										aria-expanded={isExpanded}
+										onclick={() => (expandedBlockedRequests = toggleInSet(expandedBlockedRequests, blocked.id))}
 									>
-										Delete forever
+										<span class="fl-row__chev"><Icon name="chevron-right" size={16} /></span>
+										<div class="flex min-w-0 flex-1 flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-5">
+											<span class="flex-none font-mono text-xs font-medium text-fg-muted sm:w-40">
+												{formatDateTime(blocked.createdAt)}
+											</span>
+											<span class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+												<span class="min-w-0 truncate font-mono text-[13px]">
+													{blocked.origin ?? 'Unknown origin'}
+												</span>
+												<span class="fl-badge fl-badge--spam">
+													{blocked.reason.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase())}
+												</span>
+											</span>
+										</div>
 									</button>
+
+									{#if isExpanded}
+										<div class="fl-row__body">
+											<span class="fl-overline">Blocked payload</span>
+											{#if dataEntries.length === 0}
+												<p class="fl-subtle mt-2 text-sm">No payload captured.</p>
+											{:else}
+												<dl class="fl-dl mt-2">
+													{#each dataEntries as [key, value]}
+														<dt>{key}</dt>
+														<dd>{String(value)}</dd>
+													{/each}
+												</dl>
+											{/if}
+										</div>
+									{/if}
+								</div>
+							{/each}
+						</div>
+
+						{#if data.blockedPagination.totalPages > 1}
+							{@render pager(data.blockedPagination.page, data.blockedPagination.totalPages, data.blockedPagination.hasPrevPage, data.blockedPagination.hasNextPage, 'spam_page')}
+						{/if}
+					{/if}
+				</section>
+			{:else if activeTab === 'settings'}
+				<section class="grid gap-4">
+					<div class="fl-card">
+						<!-- Redirect -->
+						<div class="fl-setting">
+							<div>
+								<h2 class="fl-h3">Redirect after submit</h2>
+								<p class="fl-muted mt-1 text-sm">
+									Where people land after sending the form. Leave empty for the built-in thank-you page.
+								</p>
+							</div>
+							<form
+								method="POST"
+								action="?/updateRedirectUrl"
+								use:enhance={() => {
+									redirectSaving = true;
+									redirectSaved = false;
+									return async ({ update, result }) => {
+										redirectSaving = false;
+										if (result.type === 'success') {
+											redirectSaved = true;
+											setTimeout(() => {
+												redirectSaved = false;
+											}, 3000);
+										}
+										await update({ reset: false });
+									};
+								}}
+								class="fl-field"
+							>
+								<label for="redirect_url" class="fl-label">Redirect URL</label>
+								<div class="flex flex-col gap-2 sm:flex-row">
+									<input
+										type="url"
+										id="redirect_url"
+										name="redirect_url"
+										bind:value={redirectUrl}
+										placeholder="https://example.com/thank-you"
+										class="fl-input fl-input--mono sm:flex-1"
+										class:fl-input--error={form?.redirectUrlError}
+									/>
+									<button type="submit" disabled={redirectSaving} class="fl-btn fl-btn--secondary">
+										{#if redirectSaving}
+											Saving…
+										{:else if redirectSaved}
+											<Icon name="check" size={16} /> Saved
+										{:else}
+											Save
+										{/if}
+									</button>
+								</div>
+								{#if form?.redirectUrlError}
+									<span class="fl-error"><Icon name="alert" size={14} />{form.redirectUrlError}</span>
+								{/if}
+							</form>
+						</div>
+
+						<!-- Emails -->
+						<div class="fl-setting">
+							<div>
+								<h2 class="fl-h3">Email notifications</h2>
+								<p class="fl-muted mt-1 text-sm">Every submission is sent to these addresses.</p>
+							</div>
+							<div class="grid gap-3">
+								<div class="flex flex-wrap gap-2">
+									{#each data.form.targetEmails as email (email)}
+										<span class="fl-chip">
+											<Icon name="mail" size={14} class="text-fg-subtle" />
+											<span class="break-all">{email}</span>
+											{#if data.form.targetEmails.length > 1}
+												<form method="POST" action="?/removeEmail" use:enhance class="contents">
+													<input type="hidden" name="email" value={email} />
+													<button type="submit" class="fl-chip__x" aria-label="Remove {email}">
+														<Icon name="x" size={12} />
+													</button>
+												</form>
+											{:else}
+												<span class="w-1.5"></span>
+											{/if}
+										</span>
+									{/each}
+								</div>
+								<form
+									method="POST"
+									action="?/addEmail"
+									use:enhance={() => {
+										emailSaving = true;
+										return async ({ update, result }) => {
+											emailSaving = false;
+											if (result.type === 'success') {
+												newEmail = '';
+											}
+											await update();
+										};
+									}}
+									class="fl-field"
+								>
+									<label for="new_email" class="sr-only">Add an email address</label>
+									<div class="flex flex-col gap-2 sm:flex-row">
+										<input
+											type="email"
+											id="new_email"
+											name="new_email"
+											bind:value={newEmail}
+											placeholder="team@example.com"
+											class="fl-input sm:flex-1"
+											class:fl-input--error={form?.emailError}
+										/>
+										<button
+											type="submit"
+											disabled={emailSaving || !newEmail.trim()}
+											class="fl-btn fl-btn--secondary"
+										>
+											<Icon name="plus" size={16} />
+											{emailSaving ? 'Adding…' : 'Add email'}
+										</button>
+									</div>
+									{#if form?.emailError}
+										<span class="fl-error"><Icon name="alert" size={14} />{form.emailError}</span>
+									{/if}
 								</form>
 							</div>
 						</div>
-					{/if}
-				</div>
-			</section>
-		{/if}
+
+						<!-- Domains -->
+						<div class="fl-setting">
+							<div>
+								<h2 class="fl-h3">Allowed domains</h2>
+								<p class="fl-muted mt-1 text-sm">
+									Only accept submissions from these sites. Leave empty to accept from anywhere.
+								</p>
+							</div>
+							<div class="grid gap-3">
+								{#if data.form.allowedDomains.length > 0}
+									<div class="flex flex-wrap gap-2">
+										{#each data.form.allowedDomains as domain (domain)}
+											<span class="fl-chip fl-chip--mono">
+												<Icon name="globe" size={14} class="text-fg-subtle" />
+												<span class="break-all">{domain}</span>
+												<form method="POST" action="?/removeAllowedDomain" use:enhance class="contents">
+													<input type="hidden" name="domain" value={domain} />
+													<button type="submit" class="fl-chip__x" aria-label="Remove {domain}">
+														<Icon name="x" size={12} />
+													</button>
+												</form>
+											</span>
+										{/each}
+									</div>
+								{:else}
+									<p class="m-0 text-sm text-fg-subtle">All origins are accepted.</p>
+								{/if}
+								<form
+									method="POST"
+									action="?/addAllowedDomain"
+									use:enhance={() => {
+										domainSaving = true;
+										return async ({ update, result }) => {
+											domainSaving = false;
+											if (result.type === 'success') {
+												newDomain = '';
+											}
+											await update();
+										};
+									}}
+									class="fl-field"
+								>
+									<label for="new_domain" class="sr-only">Add a domain or origin</label>
+									<div class="flex flex-col gap-2 sm:flex-row">
+										<input
+											type="text"
+											id="new_domain"
+											name="new_domain"
+											bind:value={newDomain}
+											placeholder="example.com"
+											class="fl-input fl-input--mono sm:flex-1"
+											class:fl-input--error={form?.allowedDomainError}
+										/>
+										<button
+											type="submit"
+											disabled={domainSaving || !newDomain.trim()}
+											class="fl-btn fl-btn--secondary"
+										>
+											<Icon name="plus" size={16} />
+											{domainSaving ? 'Adding…' : 'Add domain'}
+										</button>
+									</div>
+									{#if form?.allowedDomainError}
+										<span class="fl-error"><Icon name="alert" size={14} />{form.allowedDomainError}</span>
+									{:else}
+										<span class="fl-help">
+											Use <code class="fl-code">example.com</code>,
+											<code class="fl-code">https://example.com</code> or
+											<code class="fl-code">*.example.com</code>. A domain also covers its www. variant;
+											wildcards match subdomains only.
+										</span>
+									{/if}
+								</form>
+							</div>
+						</div>
+
+						<!-- Webhooks -->
+						<div class="fl-setting">
+							<div>
+								<h2 class="fl-h3">Webhooks</h2>
+								<p class="fl-muted mt-1 text-sm">
+									We POST each submission as JSON to these URLs, signed with the secret.
+								</p>
+							</div>
+							<div class="grid gap-3">
+								{#if data.webhooks.length > 0}
+									<div class="grid gap-2">
+										{#each data.webhooks as webhook (webhook.id)}
+											{@const revealed = revealedSecrets.has(webhook.id)}
+											<div class="flex items-start gap-3 rounded-md bg-surface-2 p-4">
+												<span
+													class="grid h-9 w-9 flex-none place-items-center rounded-sm bg-surface text-fg-muted"
+													><Icon name="webhook" size={16} /></span
+												>
+												<div class="min-w-0 flex-1">
+													<div class="break-all font-mono text-[13px] font-medium">{webhook.url}</div>
+													<div class="mt-2 flex flex-wrap items-center gap-2">
+														<span class="text-xs font-semibold text-fg-muted">Secret</span>
+														<code class="fl-code break-all !bg-surface !text-xs">
+															{revealed ? webhook.secret : '••••••••••••••••'}
+														</code>
+														<button
+															type="button"
+															class="fl-btn fl-btn--ghost fl-btn--sm !h-7 !px-2.5 !text-xs"
+															onclick={() => (revealedSecrets = toggleInSet(revealedSecrets, webhook.id))}
+														>
+															<Icon name={revealed ? 'eye-off' : 'eye'} size={14} />
+															{revealed ? 'Hide' : 'Reveal'}
+														</button>
+													</div>
+												</div>
+												<form method="POST" action="?/deleteWebhook" use:enhance class="flex-none">
+													<input type="hidden" name="webhook_id" value={webhook.id} />
+													<button
+														type="submit"
+														class="fl-btn fl-btn--ghost fl-btn--sm fl-btn--icon !w-9 hover:!bg-danger-tint hover:!text-on-danger-tint"
+														aria-label="Delete webhook {webhook.url}"
+														title="Delete webhook"
+													>
+														<Icon name="trash" size={16} />
+													</button>
+												</form>
+											</div>
+										{/each}
+									</div>
+								{:else}
+									<p class="m-0 text-sm text-fg-subtle">No webhooks yet.</p>
+								{/if}
+								<form
+									method="POST"
+									action="?/addWebhook"
+									use:enhance={() => {
+										webhookSaving = true;
+										return async ({ update, result }) => {
+											webhookSaving = false;
+											if (result.type === 'success') {
+												newWebhookUrl = '';
+											}
+											await update();
+										};
+									}}
+									class="fl-field"
+								>
+									<label for="webhook_url" class="sr-only">Webhook URL</label>
+									<div class="flex flex-col gap-2 sm:flex-row">
+										<input
+											type="url"
+											id="webhook_url"
+											name="webhook_url"
+											bind:value={newWebhookUrl}
+											placeholder="https://example.com/webhook"
+											class="fl-input fl-input--mono sm:flex-1"
+											class:fl-input--error={form?.webhookError}
+										/>
+										<button
+											type="submit"
+											disabled={webhookSaving || !newWebhookUrl.trim()}
+											class="fl-btn fl-btn--secondary"
+										>
+											<Icon name="plus" size={16} />
+											{webhookSaving ? 'Adding…' : 'Add webhook'}
+										</button>
+									</div>
+									{#if form?.webhookError}
+										<span class="fl-error"><Icon name="alert" size={14} />{form.webhookError}</span>
+									{/if}
+								</form>
+							</div>
+						</div>
+					</div>
+
+					<!-- Danger zone -->
+					<div class="fl-card !border-danger-tint">
+						<div class="fl-setting">
+							<div>
+								<h2 class="fl-h3 text-danger">Delete this form</h2>
+								<p class="fl-muted mt-1 text-sm">
+									Removes the form, every submission and its webhooks. This can't be undone.
+								</p>
+							</div>
+							<div>
+								{#if !showDeleteConfirm}
+									<button
+										type="button"
+										onclick={() => (showDeleteConfirm = true)}
+										class="fl-btn fl-btn--danger-soft"
+									>
+										<Icon name="trash" size={16} />
+										Delete form
+									</button>
+								{:else}
+									<div class="grid gap-4 rounded-md bg-danger-tint p-4 text-on-danger-tint">
+										<p class="m-0 text-sm">
+											<strong>This deletes {data.form.name} for good.</strong>
+											Type its name to confirm.
+										</p>
+										<input
+											type="text"
+											bind:value={deleteConfirmName}
+											placeholder={data.form.name}
+											aria-label="Type the form name to confirm"
+											class="fl-input"
+										/>
+										<div class="flex flex-wrap gap-2">
+											<form method="POST" action="?/deleteForm" use:enhance>
+												<button
+													type="submit"
+													disabled={deleteConfirmName !== data.form.name}
+													class="fl-btn fl-btn--danger"
+												>
+													Delete forever
+												</button>
+											</form>
+											<button
+												type="button"
+												onclick={() => {
+													showDeleteConfirm = false;
+													deleteConfirmName = '';
+												}}
+												class="fl-btn fl-btn--secondary"
+											>
+												Cancel
+											</button>
+										</div>
+									</div>
+								{/if}
+							</div>
+						</div>
+					</div>
+				</section>
+			{/if}
+		</div>
 	</div>
 </div>
+
+{#snippet pager(current: number, total: number, hasPrev: boolean, hasNext: boolean, param: string)}
+	<nav class="flex items-center justify-between gap-4 border-t border-line pt-5" aria-label="Pagination">
+		{#if hasPrev}
+			<a href="?{param}={current - 1}" class="fl-btn fl-btn--secondary fl-btn--sm">
+				<Icon name="chevron-left" size={16} />Previous
+			</a>
+		{:else}
+			<span class="fl-btn fl-btn--secondary fl-btn--sm opacity-45" aria-disabled="true">
+				<Icon name="chevron-left" size={16} />Previous
+			</span>
+		{/if}
+		<span class="font-mono text-xs text-fg-muted">Page {current} of {total}</span>
+		{#if hasNext}
+			<a href="?{param}={current + 1}" class="fl-btn fl-btn--secondary fl-btn--sm">
+				Next<Icon name="chevron-right" size={16} />
+			</a>
+		{:else}
+			<span class="fl-btn fl-btn--secondary fl-btn--sm opacity-45" aria-disabled="true">
+				Next<Icon name="chevron-right" size={16} />
+			</span>
+		{/if}
+	</nav>
+{/snippet}

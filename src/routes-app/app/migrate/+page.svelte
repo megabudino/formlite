@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { PageData, ActionData } from './$types';
 	import { enhance } from '$app/forms';
+	import { Icon } from '$lib/ui';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -16,12 +17,15 @@
 		data.orphanForms.length > 0 &&
 			data.orphanForms.every((f) => assignments[f.id] && assignments[f.id].length > 0)
 	);
-
+	const assignedCount = $derived(data.orphanForms.filter((f) => assignments[f.id]).length);
 	const hasWorkspaces = $derived(data.workspaces.length > 0);
 
 	function formatDate(dateStr: string) {
-		const date = new Date(dateStr);
-		return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+		return new Date(dateStr).toLocaleDateString(undefined, {
+			month: 'short',
+			day: 'numeric',
+			year: 'numeric'
+		});
 	}
 </script>
 
@@ -29,29 +33,32 @@
 	<title>Organize your forms — Formlite</title>
 </svelte:head>
 
-<div class="mx-auto flex max-w-3xl flex-col gap-6">
-	<header class="text-center">
-		<span
-			class="inline-flex items-center gap-2 rounded-full border border-mint-200 bg-mint-50 px-3 py-1 text-xs font-medium text-mint-700"
-		>
-			<span class="h-1.5 w-1.5 rounded-full bg-mint-500"></span>
-			One-time migration
-		</span>
-		<h1 class="mt-4 text-2xl font-bold tracking-tight text-ink-900 sm:text-3xl">
-			Organize your forms into workspaces
-		</h1>
-		<p class="mx-auto mt-2 max-w-xl text-sm text-ink-500">
-			Forms are now grouped by workspace. To continue, please assign each existing form to a
-			workspace. Create as many workspaces as you need.
+<div class="mx-auto grid max-w-[760px] grid-cols-[minmax(0,1fr)] gap-6">
+	<header class="mb-2">
+		<span class="fl-badge fl-badge--paused">One-time step</span>
+		<h1 class="fl-h1 mt-4">Move your forms into workspaces</h1>
+		<p class="fl-muted mt-2 max-w-xl">
+			Forms now live inside workspaces. Create at least one, assign every form to it, and you're
+			done. Your endpoints don't change.
 		</p>
 	</header>
 
-	<section class="rounded-xl border border-ink-100 bg-white p-6 shadow-card">
-		<h2 class="text-lg font-semibold text-ink-900">1. Create a workspace</h2>
-		<p class="mt-1 text-sm text-ink-500">
-			Workspaces are folders that group related forms (e.g. "Personal", "Acme Inc.", "Side
-			Project").
-		</p>
+	<section class="fl-card grid gap-5">
+		<div class="flex items-start gap-4">
+			<span
+				class="grid h-9 w-9 flex-none place-items-center rounded-full font-mono text-sm font-medium {hasWorkspaces
+					? 'bg-accent text-on-accent'
+					: 'bg-accent-tint text-on-accent-tint'}"
+			>
+				{#if hasWorkspaces}<Icon name="check" size={16} />{:else}1{/if}
+			</span>
+			<div>
+				<h2 class="fl-h2">Create a workspace</h2>
+				<p class="fl-muted mt-1 text-sm">
+					A workspace groups related forms, for example "Personal", "Acme Inc." or a side project.
+				</p>
+			</div>
+		</div>
 
 		<form
 			method="POST"
@@ -64,57 +71,64 @@
 					creatingWorkspace = false;
 				};
 			}}
-			class="mt-4 flex flex-wrap gap-2"
+			class="fl-field"
 		>
-			<input
-				type="text"
-				name="name"
-				bind:value={workspaceName}
-				placeholder="Workspace name"
-				maxlength="100"
-				required
-				class="min-w-52 flex-1 rounded-lg border border-ink-200 bg-white px-3.5 py-2 text-sm text-ink-900 placeholder:text-ink-400 focus:border-mint-500 focus:outline-none focus:ring-2 focus:ring-mint-500/30"
-			/>
-			<button
-				type="submit"
-				disabled={creatingWorkspace || !workspaceName.trim()}
-				class="inline-flex items-center justify-center rounded-lg bg-mint-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-mint-600 disabled:cursor-not-allowed disabled:bg-mint-300"
-			>
-				{creatingWorkspace ? 'Creating…' : 'Create workspace'}
-			</button>
+			<label for="ws-name" class="sr-only">Workspace name</label>
+			<div class="flex flex-col gap-2 sm:flex-row">
+				<input
+					id="ws-name"
+					type="text"
+					name="name"
+					bind:value={workspaceName}
+					placeholder="Workspace name"
+					maxlength="100"
+					required
+					class="fl-input sm:flex-1"
+				/>
+				<button
+					type="submit"
+					disabled={creatingWorkspace || !workspaceName.trim()}
+					class="fl-btn {hasWorkspaces ? 'fl-btn--secondary' : 'fl-btn--primary'}"
+				>
+					<Icon name="plus" size={16} />
+					{creatingWorkspace ? 'Creating…' : 'Create workspace'}
+				</button>
+			</div>
+			{#if form && 'workspaceError' in form && form.workspaceError}
+				<span class="fl-error"><Icon name="alert" size={14} />{form.workspaceError}</span>
+			{/if}
 		</form>
 
-		{#if form && 'workspaceError' in form && form.workspaceError}
-			<p class="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
-				{form.workspaceError}
-			</p>
-		{/if}
-
 		{#if hasWorkspaces}
-			<ul class="mt-4 space-y-2">
-				{#each data.workspaces as workspace}
-					<li
-						class="flex items-center justify-between rounded-lg border border-ink-100 bg-ink-50/60 px-4 py-2.5"
-					>
-						<span class="text-sm font-medium text-ink-900">{workspace.name}</span>
-						<span class="text-xs text-ink-500">
+			<div class="flex flex-wrap gap-2">
+				{#each data.workspaces as workspace (workspace.id)}
+					<span class="fl-chip !pr-3">
+						<Icon name="folder" size={14} class="text-fg-subtle" />
+						{workspace.name}
+						<span class="font-mono text-xs text-fg-subtle">
 							{workspace.formCount === 1 ? '1 form' : `${workspace.formCount} forms`}
 						</span>
-					</li>
+					</span>
 				{/each}
-			</ul>
-		{:else}
-			<p class="mt-4 text-sm italic text-ink-400">
-				No workspaces yet. Create one above to start assigning forms.
-			</p>
+			</div>
 		{/if}
 	</section>
 
-	<section class="rounded-xl border border-ink-100 bg-white p-6 shadow-card">
-		<h2 class="text-lg font-semibold text-ink-900">2. Assign each form to a workspace</h2>
-		<p class="mt-1 text-sm text-ink-500">
-			All {data.orphanForms.length} forms below need to be assigned before you can continue.
-		</p>
+	<section class="fl-card grid gap-5" class:opacity-60={!hasWorkspaces}>
+		<div class="flex items-start gap-4">
+			<span
+				class="grid h-9 w-9 flex-none place-items-center rounded-full bg-accent-tint font-mono text-sm font-medium text-on-accent-tint"
+				>2</span
+			>
+			<div class="flex-1">
+				<h2 class="fl-h2">Assign each form</h2>
+				<p class="fl-muted mt-1 text-sm">
+					{hasWorkspaces
+						? `${assignedCount} of ${data.orphanForms.length} assigned.`
+						: 'Create a workspace first.'}
+				</p>
+			</div>
+		</div>
 
 		<form
 			method="POST"
@@ -126,39 +140,42 @@
 					assigning = false;
 				};
 			}}
-			class="mt-4"
+			class="grid gap-5"
 		>
 			{#if form && 'assignError' in form && form.assignError}
-				<p class="mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
-					{form.assignError}
-				</p>
+				<div class="fl-alert fl-alert--error" role="alert">
+					<Icon name="alert" size={20} class="fl-alert__icon" />
+					<div><strong>Forms weren't moved.</strong> {form.assignError}</div>
+				</div>
 			{/if}
 
-			<div class="flex flex-col gap-2">
-				{#each data.orphanForms as orphanForm}
+			<div class="grid gap-2">
+				{#each data.orphanForms as orphanForm (orphanForm.id)}
 					<div
-						class="flex flex-col items-stretch gap-3 rounded-lg border border-ink-100 bg-ink-50/60 p-3 sm:flex-row sm:items-center sm:p-4"
+						class="flex flex-col items-stretch gap-3 rounded-md bg-surface-2 p-4 sm:flex-row sm:items-center"
 					>
 						<div class="min-w-0 flex-1">
-							<div class="truncate text-sm font-medium text-ink-900">{orphanForm.name}</div>
-							<div class="mt-0.5 text-xs text-ink-500">
-								Created {formatDate(orphanForm.createdAt)} ·
+							<div class="truncate font-semibold">{orphanForm.name}</div>
+							<div class="mt-0.5 font-mono text-xs text-fg-muted">
+								{formatDate(orphanForm.createdAt)} ·
 								{orphanForm.submissionCount === 1
 									? '1 submission'
 									: `${orphanForm.submissionCount} submissions`}
 							</div>
 						</div>
+						<label class="sr-only" for="assign-{orphanForm.id}">Workspace for {orphanForm.name}</label>
 						<select
+							id="assign-{orphanForm.id}"
 							name={`assign__${orphanForm.id}`}
 							bind:value={assignments[orphanForm.id]}
 							disabled={!hasWorkspaces}
 							required
-							class="min-w-44 rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-900 focus:border-mint-500 focus:outline-none focus:ring-2 focus:ring-mint-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+							class="fl-input sm:!w-56"
 						>
 							<option value="" disabled>
-								{hasWorkspaces ? 'Choose workspace…' : 'Create a workspace first'}
+								{hasWorkspaces ? 'Choose a workspace…' : 'Create a workspace first'}
 							</option>
-							{#each data.workspaces as workspace}
+							{#each data.workspaces as workspace (workspace.id)}
 								<option value={workspace.id}>{workspace.name}</option>
 							{/each}
 						</select>
@@ -166,13 +183,18 @@
 				{/each}
 			</div>
 
-			<div class="mt-5 flex justify-end border-t border-ink-100 pt-4">
+			<div class="flex justify-end border-t border-line pt-5">
 				<button
 					type="submit"
 					disabled={assigning || !allAssigned || !hasWorkspaces}
-					class="inline-flex items-center justify-center rounded-lg bg-mint-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-mint-600 disabled:cursor-not-allowed disabled:bg-mint-300"
+					class="fl-btn fl-btn--primary"
 				>
-					{assigning ? 'Moving…' : 'Move all forms and continue'}
+					{#if assigning}
+						Moving…
+					{:else}
+						Move forms and continue
+						<Icon name="arrow-right" />
+					{/if}
 				</button>
 			</div>
 		</form>

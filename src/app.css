@@ -1,63 +1,259 @@
 @import 'tailwindcss';
+@import './lib/styles/tokens.css';
+/* In the components layer so Tailwind utilities can override fl- classes (e.g. `fl-card grid`). */
+@import './lib/styles/components.css' layer(components);
 
+/* Make the design-system tokens available as Tailwind utilities (bg-surface, text-fg-muted, border-line…).
+   `inline` keeps the var() reference so light/dark switching through [data-theme] just works. */
+@theme inline {
+	--color-bg: var(--bg);
+	--color-surface: var(--surface);
+	--color-surface-2: var(--surface-2);
+	--color-surface-hover: var(--surface-hover);
+	--color-line: var(--line);
+	--color-line-strong: var(--line-strong);
+	--color-fg: var(--text);
+	--color-fg-muted: var(--text-muted);
+	--color-fg-subtle: var(--text-subtle);
+	--color-accent: var(--accent);
+	--color-accent-hover: var(--accent-hover);
+	--color-on-accent: var(--on-accent);
+	--color-accent-text: var(--accent-text);
+	--color-accent-tint: var(--accent-tint);
+	--color-on-accent-tint: var(--on-accent-tint);
+	--color-amber: var(--amber);
+	--color-on-amber: var(--on-amber);
+	--color-amber-tint: var(--amber-tint);
+	--color-on-amber-tint: var(--on-amber-tint);
+	--color-danger: var(--danger);
+	--color-on-danger: var(--on-danger);
+	--color-danger-tint: var(--danger-tint);
+	--color-on-danger-tint: var(--on-danger-tint);
+	--color-inverse: var(--inverse);
+	--color-on-inverse: var(--on-inverse);
+	--color-brand-mint: var(--brand-mint);
+	--color-brand-forest: var(--brand-forest);
+	--color-chart-1: var(--chart-1);
+	--color-chart-2: var(--chart-2);
+	--color-chart-3: var(--chart-3);
+	--color-chart-4: var(--chart-4);
+
+	--shadow-card: var(--shadow-sm);
+	--shadow-lift: var(--shadow-md);
+	--shadow-glow: var(--shadow-glow);
+}
+
+/* Same values as tokens.css, so Tailwind's font-* and rounded-* utilities match the design system */
 @theme {
-	--font-sans:
-		'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-		'Helvetica Neue', Arial, sans-serif;
-	--font-mono:
-		'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-	--font-display: 'Inter', ui-sans-serif, system-ui, sans-serif;
+	--font-sans: 'Instrument Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+	--font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+	--font-display: 'Bricolage Grotesque', 'Instrument Sans', system-ui, sans-serif;
 
-	--color-mint-50: #ecfdf5;
-	--color-mint-100: #d1fae5;
-	--color-mint-200: #a7f3d0;
-	--color-mint-300: #6ee7b7;
-	--color-mint-400: #34d399;
-	--color-mint-500: #10b981;
-	--color-mint-600: #059669;
-	--color-mint-700: #047857;
-	--color-mint-800: #065f46;
-	--color-mint-900: #064e3b;
-	--color-mint-950: #022c22;
-
-	--color-ink-50: #f8fafc;
-	--color-ink-100: #f1f5f9;
-	--color-ink-200: #e2e8f0;
-	--color-ink-300: #cbd5e1;
-	--color-ink-400: #94a3b8;
-	--color-ink-500: #64748b;
-	--color-ink-600: #475569;
-	--color-ink-700: #334155;
-	--color-ink-800: #1e293b;
-	--color-ink-900: #0f172a;
-
-	--radius-md: 0.5rem;
-	--radius-lg: 0.75rem;
-	--radius-xl: 1rem;
-
-	--shadow-card: 0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px 0 rgb(15 23 42 / 0.06);
-	--shadow-card-hover: 0 4px 12px -2px rgb(15 23 42 / 0.08), 0 2px 6px -2px rgb(15 23 42 / 0.05);
+	--radius-xs: 6px;
+	--radius-sm: 10px;
+	--radius-md: 14px;
+	--radius-lg: 20px;
+	--radius-xl: 28px;
 }
 
 @layer base {
 	html {
-		font-family: var(--font-sans);
-		-webkit-font-smoothing: antialiased;
-		-moz-osx-font-smoothing: grayscale;
-		text-rendering: optimizeLegibility;
+		color-scheme: light;
+	}
+	html[data-theme='dark'] {
+		color-scheme: dark;
 	}
 
+	/* The whole document behaves like the design system's .fl-root */
 	body {
-		background-color: var(--color-ink-50);
-		color: var(--color-ink-800);
+		margin: 0;
+		font-family: var(--font-sans);
+		font-size: 15px;
+		line-height: 22px;
+		color: var(--text);
+		background: var(--bg);
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+		font-variant-numeric: tabular-nums;
 	}
 
 	::selection {
-		background-color: var(--color-mint-200);
-		color: var(--color-mint-900);
+		background: var(--accent);
+		color: var(--on-accent);
+	}
+
+	:focus-visible {
+		outline: 2px solid var(--focus);
+		outline-offset: 2px;
+	}
+
+	h1,
+	h2,
+	h3 {
+		text-wrap: balance;
 	}
 }
 
-@utility focus-ring {
-	@apply outline-none ring-2 ring-mint-500/30 ring-offset-0 border-mint-500;
+@layer components {
+/* --- App-level additions built on the same tokens --- */
+
+/* Native select styled like .fl-input */
+select.fl-input {
+	appearance: none;
+	padding-right: 40px;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23557266' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+	background-repeat: no-repeat;
+	background-position: right 14px center;
+	background-size: 16px;
+	cursor: pointer;
+}
+
+/* Buttons inside mono containers (code block bar, endpoint pill) keep the UI face */
+.fl-codeblock__bar .fl-btn,
+.fl-endpoint .fl-btn {
+	font-family: var(--font-sans);
+	letter-spacing: normal;
+	text-transform: none;
+	font-size: 13px;
+}
+
+/* Back link above page titles */
+.fl-back {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 32px;
+	padding: 0 12px 0 8px;
+	margin-left: -8px;
+	border-radius: var(--radius-pill);
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--text-muted);
+	text-decoration: none;
+	transition:
+		background-color var(--fl-fast) var(--fl-ease),
+		color var(--fl-fast) var(--fl-ease);
+}
+.fl-back:hover {
+	background: var(--surface-hover);
+	color: var(--text);
+}
+
+/* Empty states: a soft dashed card with a mint tile */
+.fl-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	text-align: center;
+	padding: 56px 24px;
+	border: 1.5px dashed var(--line-strong);
+	border-radius: var(--radius-lg);
+	background: var(--surface);
+}
+
+/* Expandable rows (submissions, blocked requests) */
+.fl-row {
+	border: 1px solid var(--line);
+	border-radius: var(--radius-md);
+	background: var(--surface);
+	overflow: hidden;
+	transition: border-color var(--fl-fast) var(--fl-ease);
+}
+.fl-row[data-open='true'] {
+	border-color: var(--line-strong);
+}
+.fl-row__head {
+	display: flex;
+	width: 100%;
+	align-items: center;
+	gap: 16px;
+	padding: 14px 16px;
+	border: 0;
+	background: transparent;
+	font: inherit;
+	color: inherit;
+	text-align: left;
+	cursor: pointer;
+	transition: background-color var(--fl-fast) var(--fl-ease);
+}
+.fl-row__head:hover {
+	background: var(--surface-hover);
+}
+.fl-row__chev {
+	flex: none;
+	color: var(--text-subtle);
+	transition: transform var(--fl-fast) var(--fl-ease);
+}
+.fl-row[data-open='true'] .fl-row__chev {
+	transform: rotate(90deg);
+}
+.fl-row__body {
+	padding: 16px;
+	border-top: 1px solid var(--line);
+	background: var(--surface-2);
+}
+
+/* Key/value lists */
+.fl-dl {
+	display: grid;
+	grid-template-columns: minmax(96px, max-content) 1fr;
+	gap: 8px 20px;
+	margin: 0;
+	font-size: 14px;
+	line-height: 20px;
+}
+.fl-dl dt {
+	font-family: var(--font-mono);
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--text-muted);
+	padding-top: 1px;
+}
+.fl-dl dd {
+	margin: 0;
+	min-width: 0;
+	overflow-wrap: anywhere;
+	white-space: pre-wrap;
+}
+
+/* Settings rows: title + description left, controls right on wide screens */
+.fl-setting {
+	display: grid;
+	gap: 16px;
+	padding: 28px 0;
+	border-bottom: 1px solid var(--line);
+}
+.fl-setting:first-child {
+	padding-top: 0;
+}
+.fl-setting:last-child {
+	border-bottom: 0;
+	padding-bottom: 0;
+}
+@media (min-width: 860px) {
+	.fl-setting {
+		grid-template-columns: 280px 1fr;
+		gap: 40px;
+	}
+}
+
+/* Decorative bars borrowed from the mark (auth screens, empty states) */
+.fl-bars {
+	display: grid;
+	gap: 10px;
+}
+.fl-bars i {
+	display: block;
+	height: 18px;
+	border-radius: var(--radius-pill);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		transition-duration: 0.01ms !important;
+		animation-duration: 0.01ms !important;
+	}
+}
 }
