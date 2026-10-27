@@ -2,7 +2,22 @@
 	import type { PageData, ActionData } from './$types';
 	import { page } from '$app/stores';
 	import { enhance } from '$app/forms';
+	import { invalidateAll } from '$app/navigation';
+	import { onMount } from 'svelte';
 	import { Icon } from '$lib/ui';
+	import IntegrationGuide from '$lib/ui/IntegrationGuide.svelte';
+	import StatCard from '$lib/ui/dash/StatCard.svelte';
+	import RangeSelect from '$lib/ui/dash/RangeSelect.svelte';
+	import { chart } from '$lib/charts';
+	import {
+		buildHeatmap,
+		buildSeries,
+		computeDelta,
+		parseUtc,
+		rangeLabel,
+		reasonLabel,
+		timeAgo
+	} from '$lib/stats';
 
 	type FormActionData = ActionData & { allowedDomainError?: string };
 
@@ -27,25 +42,27 @@
 		blockedPagination: BlockedPagination;
 	};
 
-	type TabId = 'integration' | 'submissions' | 'spam' | 'settings';
+	type TabId = 'submissions' | 'spam' | 'settings';
 
 	let { data, form }: { data: FormPageData; form: FormActionData } = $props();
 
-	// Open the tab the URL points at, so pagination links don't bounce back to "Integration".
+	// A form that has never received anything puts the integration guide front and centre.
+	const hasSubmissions = $derived(data.pagination.totalSubmissions > 0);
+
+	// Open the tab the URL points at, so pagination links land on the right list.
 	function initialTab(): TabId {
 		const params = $page.url.searchParams;
 		const tab = params.get('tab');
-		if (tab === 'integration' || tab === 'submissions' || tab === 'spam' || tab === 'settings') {
-			return tab;
-		}
+		if (tab === 'submissions' || tab === 'spam' || tab === 'settings') return tab;
 		if (params.has('spam_page')) return 'spam';
-		if (params.has('page')) return 'submissions';
-		return 'integration';
+		return 'submissions';
 	}
 
 	let activeTab = $state<TabId>(initialTab());
-	let copied = $state(false);
 	let endpointCopied = $state(false);
+	let guideDialog = $state<HTMLDialogElement | null>(null);
+	let firstArrived = $state(false);
+	let now = $state<Date | null>(null);
 	let redirectUrl = $state(data.form.redirectUrl ?? '');
 	let redirectSaving = $state(false);
 	let redirectSaved = $state(false);
@@ -64,45 +81,46 @@
 	let expandedBlockedRequests = $state<Set<number>>(new Set());
 
 	const actionUrl = $derived(`${$page.url.origin}/s/${data.form.id}`);
-
-	const htmlSnippet = $derived(`<form action="${actionUrl}" method="POST">
-  <input type="email" name="email" placeholder="Your email" required>
-  <textarea name="message" placeholder="Your message" required></textarea>
-
-  <!-- Honeypot field - do not remove -->
-  <input type="text" name="_gotcha" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px">
-
-  <button type="submit">Send</button>
-</form>`);
-
-	function escapeHtml(s: string) {
-		return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-	}
-
-	// Minimal HTML highlighter for the snippet: tags in mint, strings in amber, comments dimmed.
-	const highlightedSnippet = $derived(
-		htmlSnippet.replace(
-			/(<!--[\s\S]*?-->)|(<\/?[a-zA-Z]+)|(\/?>)|("[^"]*")|([^<>"]+)/g,
-			(_m, comment, tagOpen, tagClose, str, text) => {
-				if (comment) return `<span style="opacity:.55">${escapeHtml(comment)}</span>`;
-				if (tagOpen) return `<span class="k">${escapeHtml(tagOpen)}</span>`;
-				if (tagClose) return `<span class="k">${escapeHtml(tagClose)}</span>`;
-				if (str) return `<span class="s">${escapeHtml(str)}</span>`;
-				return escapeHtml(text ?? '');
-			}
+	const ov = $derived(data.overview);
+	const series = $derived(now ? buildSeries(ov.buckets, ov.range, now) : null);
+	const heat = $derived(now ? buildHeatmap(ov.buckets) : null);
+	const weekdays = $derived(
+		Array.from({ length: 7 }, (_, i) =>
+			new Date(2024, 0, 1 + i).toLocaleDateString(undefined, { weekday: 'short' })
 		)
 	);
 
-	async function copyText(text: string, which: 'snippet' | 'endpoint') {
+	onMount(() => {
+		now = new Date();
+		// Old links to ?tab=integration open the guide instead.
+		if ($page.url.searchParams.get('tab') === 'integration' && hasSubmissions) guideDialog?.showModal();
+	});
+
+	// While waiting for the first submission, check every few seconds so the page
+	// flips to the dashboard by itself the moment one lands.
+	$effect(() => {
+		if (hasSubmissions) return;
+		const timer = setInterval(() => {
+			if (document.visibilityState === 'visible') invalidateAll();
+		}, 5000);
+		return () => clearInterval(timer);
+	});
+
+	// null until the first run, so only a change seen while the page is open counts as "arrived".
+	let wasEmpty: boolean | null = null;
+	$effect(() => {
+		if (wasEmpty === true && hasSubmissions) {
+			firstArrived = true;
+			now = new Date();
+		}
+		wasEmpty = !hasSubmissions;
+	});
+
+	async function copyEndpoint() {
 		try {
-			await navigator.clipboard.writeText(text);
-			if (which === 'snippet') {
-				copied = true;
-				setTimeout(() => (copied = false), 2000);
-			} else {
-				endpointCopied = true;
-				setTimeout(() => (endpointCopied = false), 2000);
-			}
+			await navigator.clipboard.writeText(actionUrl);
+			endpointCopied = true;
+			setTimeout(() => (endpointCopied = false), 2000);
 		} catch (err) {
 			console.error('Failed to copy:', err);
 		}
@@ -116,7 +134,7 @@
 	}
 
 	function formatDateTime(dateStr: string) {
-		return new Date(dateStr).toLocaleString(undefined, {
+		return parseUtc(dateStr).toLocaleString(undefined, {
 			month: 'short',
 			day: 'numeric',
 			year: 'numeric',
@@ -126,7 +144,7 @@
 	}
 
 	function formatDate(dateStr: string) {
-		return new Date(dateStr).toLocaleDateString(undefined, {
+		return parseUtc(dateStr).toLocaleDateString(undefined, {
 			month: 'short',
 			day: 'numeric',
 			year: 'numeric'
@@ -146,7 +164,6 @@
 	}
 
 	const tabs = [
-		{ id: 'integration', label: 'Integration', icon: 'code' },
 		{ id: 'submissions', label: 'Submissions', icon: 'inbox' },
 		{ id: 'spam', label: 'Spam', icon: 'shield' },
 		{ id: 'settings', label: 'Settings', icon: 'settings' }
@@ -167,70 +184,147 @@
 		{:else}
 			<a href="/app" class="fl-back"><Icon name="chevron-left" size={16} />All workspaces</a>
 		{/if}
-		<div class="mt-3 flex flex-wrap items-center gap-3">
-			<h1 class="fl-h1 min-w-0 break-words">{data.form.name}</h1>
-			<span class="fl-badge {data.form.isActive ? 'fl-badge--live' : 'fl-badge--paused'}">
-				{data.form.isActive ? 'Live' : 'Paused'}
-			</span>
+		<div class="mt-3 flex flex-wrap items-end justify-between gap-4">
+			<div class="min-w-0">
+				<div class="flex flex-wrap items-center gap-3">
+					<h1 class="fl-h1 min-w-0 break-words">{data.form.name}</h1>
+					<span class="fl-badge {data.form.isActive ? 'fl-badge--live' : 'fl-badge--paused'}">
+						{data.form.isActive ? 'Live' : 'Paused'}
+					</span>
+				</div>
+				<p class="fl-muted m-0 mt-1.5 text-sm">
+					Created {formatDate(data.form.createdAt)}{data.form.isActive
+						? ''
+						: ' · Not accepting submissions right now'}
+				</p>
+			</div>
+			{#if hasSubmissions}
+				<RangeSelect value={ov.range} />
+			{/if}
 		</div>
-		<p class="fl-muted mt-1.5 text-sm">
-			Created {formatDate(data.form.createdAt)}{data.form.isActive
-				? ''
-				: ' · Not accepting submissions right now'}
-		</p>
 
-		<div class="fl-endpoint mt-5 max-w-[720px]">
-			<span class="fl-endpoint__verb">POST</span>
-			<span class="fl-endpoint__url" title={actionUrl}>{actionUrl}</span>
-			<button
-				type="button"
-				class="fl-btn fl-btn--primary fl-btn--sm"
-				onclick={() => copyText(actionUrl, 'endpoint')}
-			>
-				<Icon name={endpointCopied ? 'check' : 'copy'} size={16} />
-				{endpointCopied ? 'Copied' : 'Copy'}
-			</button>
-		</div>
+		{#if hasSubmissions}
+			<div class="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center">
+				<div class="fl-endpoint min-w-0 sm:max-w-[640px] sm:flex-1">
+					<span class="fl-endpoint__verb">POST</span>
+					<span class="fl-endpoint__url" title={actionUrl}>{actionUrl}</span>
+					<button type="button" class="fl-btn fl-btn--primary fl-btn--sm" onclick={copyEndpoint}>
+						<Icon name={endpointCopied ? 'check' : 'copy'} size={16} />
+						{endpointCopied ? 'Copied' : 'Copy'}
+					</button>
+				</div>
+				<button type="button" class="fl-btn fl-btn--secondary" onclick={() => guideDialog?.showModal()}>
+					<Icon name="book" />
+					Integration guide
+				</button>
+			</div>
+		{/if}
 	</div>
 
-	<!-- Summary -->
-	<div class="fl-grid-stats gap-4">
-		<button
-			type="button"
-			class="fl-card fl-card--accent fl-stat cursor-pointer text-left"
-			onclick={() => selectTab('submissions')}
-		>
-			<span class="fl-overline">Submissions · all time</span>
-			<span class="fl-stat__value fl-stat__value--xl">
-				{data.pagination.totalSubmissions.toLocaleString()}
-			</span>
-			<span class="fl-delta">
-				View inbox <Icon name="arrow-right" size={12} />
-			</span>
-		</button>
-		<button type="button" class="fl-card fl-stat cursor-pointer text-left" onclick={() => selectTab('spam')}>
-			<span class="fl-overline">Spam blocked</span>
-			<span class="fl-stat__value">{data.blockedPagination.totalBlockedRequests.toLocaleString()}</span>
-			<span class="fl-help">Honeypot, origin checks and rate limits</span>
-		</button>
-		<button
-			type="button"
-			class="fl-card fl-stat cursor-pointer text-left"
-			onclick={() => selectTab('settings')}
-		>
-			<span class="fl-overline">Delivery</span>
-			<span class="fl-stat__value">
-				{data.form.targetEmails.length + data.webhooks.length}
-			</span>
-			<span class="fl-help">
-				{plural(data.form.targetEmails.length, 'email', 'emails')} · {plural(
-					data.webhooks.length,
-					'webhook',
-					'webhooks'
-				)}
-			</span>
-		</button>
-	</div>
+	{#if firstArrived}
+		<div class="fl-alert fl-alert--success" role="status">
+			<Icon name="check-circle" size={20} class="fl-alert__icon" />
+			<div><strong>Your first submission just arrived.</strong> The form is connected and working.</div>
+		</div>
+	{/if}
+
+	{#if !hasSubmissions}
+		<!-- Setup: nothing received yet -->
+		<section class="fl-card mx-auto w-full max-w-[880px] !rounded-xl sm:!p-10">
+			<div class="mb-8 flex flex-col items-start gap-3">
+				<span class="fl-badge fl-badge--live">Listening for submissions</span>
+				<h2 class="fl-h1 !text-[30px] !leading-[36px]">Connect your form</h2>
+				<p class="fl-muted m-0 max-w-[560px]">
+					Point any HTML form at this endpoint. This page updates by itself as soon as the first
+					submission comes in.
+				</p>
+			</div>
+			<IntegrationGuide {actionUrl} />
+		</section>
+	{:else}
+		<!-- Overview -->
+		<div class="grid grid-cols-[minmax(0,1fr)] gap-4">
+			<div class="fl-grid-stats gap-4">
+				<StatCard
+					accent
+					label="Submissions · {ov.range}"
+					value={ov.totals.submissions.toLocaleString()}
+					delta={computeDelta(ov.totals.submissions, ov.totals.submissionsPrev, ov.range)}
+					points={series?.submissions ?? null}
+				/>
+				<StatCard
+					label="Spam blocked · {ov.range}"
+					value={ov.totals.blocked.toLocaleString()}
+					delta={computeDelta(ov.totals.blocked, ov.totals.blockedPrev, ov.range)}
+					goodWhen="down"
+					points={series?.blocked ?? null}
+					slot={4}
+				/>
+				<StatCard
+					label="Last submission"
+					value={ov.lastSubmissionAt && now ? timeAgo(ov.lastSubmissionAt, now.getTime()) : '—'}
+					help="{plural(data.pagination.totalSubmissions, 'submission', 'submissions')} in total · sent to {plural(
+						data.form.targetEmails.length,
+						'email',
+						'emails'
+					)}{data.webhooks.length ? ` and ${plural(data.webhooks.length, 'webhook', 'webhooks')}` : ''}"
+				/>
+			</div>
+
+			<div class="fl-grid-split gap-4">
+				<section class="fl-card">
+					<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+						<h2 class="fl-h2">Traffic</h2>
+						<div class="fl-legend">
+							<span><i style="background:var(--chart-1)"></i>Submissions</span>
+							<span><i style="background:var(--chart-4)"></i>Blocked</span>
+						</div>
+					</div>
+					{#if series}
+						<div
+							class="fl-chart"
+							use:chart={{
+								type: 'trend',
+								options: {
+									labels: series.labels,
+									full: series.full,
+									title: `Submissions and blocked requests, ${rangeLabel(ov.range)}`,
+									series: [
+										{ name: 'Submissions', slot: 1, data: series.submissions },
+										{ name: 'Blocked', slot: 4, data: series.blocked }
+									]
+								}
+							}}
+						></div>
+					{:else}
+						<div class="h-[240px]"></div>
+					{/if}
+				</section>
+
+				<section class="fl-card">
+					<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+						<h2 class="fl-h2">When people write</h2>
+						<span class="fl-overline">Last 30 days</span>
+					</div>
+					{#if heat}
+						<div class="fl-heat" use:chart={{ type: 'heat', options: { rows: heat, days: weekdays } }}></div>
+						<div class="mt-3 flex justify-between font-mono text-[11px] text-fg-subtle" style="padding-left:32px">
+							<span>00</span><span>06</span><span>12</span><span>18</span><span>23</span>
+						</div>
+						<div class="fl-ramp mt-3 justify-end">
+							Less <i class="bg-surface-2"></i><i style="background:var(--seq-1)"></i><i
+								style="background:var(--seq-2)"
+							></i><i style="background:var(--seq-3)"></i><i style="background:var(--seq-4)"></i><i
+								style="background:var(--seq-5)"
+							></i> More
+						</div>
+					{:else}
+						<div class="h-[200px]"></div>
+					{/if}
+				</section>
+			</div>
+		</div>
+	{/if}
 
 	<!-- Tabs -->
 	<div class="grid grid-cols-[minmax(0,1fr)] gap-6">
@@ -252,54 +346,7 @@
 		</div>
 
 		<div id="panel-{activeTab}" role="tabpanel" aria-labelledby="tab-{activeTab}">
-			{#if activeTab === 'integration'}
-				<section class="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-					<div class="fl-card grid content-start gap-5">
-						<div>
-							<h2 class="fl-h2">Add it to your site</h2>
-							<p class="fl-muted mt-1">Paste this snippet, or point your own form at the endpoint.</p>
-						</div>
-						<div class="fl-codeblock">
-							<div class="fl-codeblock__bar">
-								<span class="fl-codeblock__name">index.html</span>
-								<button
-									type="button"
-									class="fl-btn fl-btn--sm"
-									style="background:var(--brand-mint);color:var(--brand-forest)"
-									onclick={() => copyText(htmlSnippet, 'snippet')}
-								>
-									<Icon name={copied ? 'check' : 'copy'} size={16} />
-									{copied ? 'Copied' : 'Copy snippet'}
-								</button>
-							</div>
-							<pre><code>{@html highlightedSnippet}</code></pre>
-						</div>
-					</div>
-
-					<div class="fl-card grid content-start gap-5">
-						<h2 class="fl-h2">How it works</h2>
-						<ol class="m-0 grid list-none gap-5 p-0">
-							{#each [
-								{ t: 'Point the action at your endpoint', d: 'Set the form\'s action attribute to the URL above.' },
-								{ t: 'Send it with POST', d: 'Use method="POST". Every named field is captured.' },
-								{ t: 'Keep the honeypot', d: 'Leave the hidden _gotcha field empty. Bots fill it and get blocked.' },
-								{ t: 'Get notified', d: 'Each submission goes to your emails and webhooks.' }
-							] as step, i}
-								<li class="flex gap-3">
-									<span
-										class="grid h-7 w-7 flex-none place-items-center rounded-full bg-accent-tint font-mono text-xs font-medium text-on-accent-tint"
-										>{i + 1}</span
-									>
-									<div>
-										<p class="m-0 text-sm font-semibold">{step.t}</p>
-										<p class="fl-muted m-0 mt-0.5 text-sm">{step.d}</p>
-									</div>
-								</li>
-							{/each}
-						</ol>
-					</div>
-				</section>
-			{:else if activeTab === 'submissions'}
+			{#if activeTab === 'submissions'}
 				<section class="fl-card grid gap-5">
 					<div>
 						<h2 class="fl-h2">Submissions</h2>
@@ -318,7 +365,7 @@
 							<span class="fl-card__tile"><Icon name="inbox" /></span>
 							<p class="mt-3 font-semibold">No submissions yet</p>
 							<p class="fl-muted mt-1 max-w-xs text-sm">
-								Send a test from your site, or copy the snippet from the Integration tab.
+								They'll show up here as they arrive.
 							</p>
 						</div>
 					{:else}
@@ -475,7 +522,7 @@
 													{blocked.origin ?? 'Unknown origin'}
 												</span>
 												<span class="fl-badge fl-badge--spam">
-													{blocked.reason.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase())}
+													{reasonLabel(blocked.reason)}
 												</span>
 											</span>
 										</div>
@@ -863,6 +910,33 @@
 		</div>
 	</div>
 </div>
+
+<dialog
+	bind:this={guideDialog}
+	class="fl-dialog"
+	aria-labelledby="guide-title"
+	onclick={(e) => {
+		if (e.target === guideDialog) guideDialog?.close();
+	}}
+>
+	<div class="fl-dialog__head">
+		<div>
+			<span class="fl-overline">{data.form.name}</span>
+			<h2 class="fl-h2 mt-1" id="guide-title">Integration guide</h2>
+		</div>
+		<button
+			type="button"
+			class="fl-btn fl-btn--ghost fl-btn--icon fl-btn--sm !w-9"
+			aria-label="Close"
+			onclick={() => guideDialog?.close()}
+		>
+			<Icon name="x" />
+		</button>
+	</div>
+	<div class="fl-dialog__body">
+		<IntegrationGuide {actionUrl} />
+	</div>
+</dialog>
 
 {#snippet pager(current: number, total: number, hasPrev: boolean, hasNext: boolean, param: string)}
 	<nav class="flex items-center justify-between gap-4 border-t border-line pt-5" aria-label="Pagination">

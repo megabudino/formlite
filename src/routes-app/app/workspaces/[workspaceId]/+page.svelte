@@ -2,6 +2,8 @@
 	import type { PageData } from './$types';
 	import { enhance } from '$app/forms';
 	import { Icon } from '$lib/ui';
+	import OverviewPanel from '$lib/ui/dash/OverviewPanel.svelte';
+	import RangeSelect from '$lib/ui/dash/RangeSelect.svelte';
 
 	let { data }: { data: PageData } = $props();
 
@@ -39,13 +41,21 @@
 				<h1 class="fl-h1 mt-1.5 break-words">{data.workspace.name}</h1>
 			</div>
 			{#if data.forms.length > 0}
-				<a href={newFormHref} class="fl-btn fl-btn--primary">
-					<Icon name="plus" />
-					New form
-				</a>
+				<div class="flex flex-wrap items-center gap-2">
+					<RangeSelect value={data.overview.range} />
+					<a href={newFormHref} class="fl-btn fl-btn--primary">
+						<Icon name="plus" />
+						New form
+					</a>
+				</div>
 			{/if}
 		</div>
 	</div>
+
+	{#if data.forms.length > 0}
+		<OverviewPanel overview={data.overview} />
+		<h2 class="fl-h2 -mb-4">Forms</h2>
+	{/if}
 
 	{#if data.forms.length === 0}
 		<div class="fl-empty">
@@ -72,7 +82,7 @@
 							</span>
 							<span class="fl-card__arrow"><Icon name="arrow-right" size={16} /></span>
 						</div>
-						<h2 class="fl-card__title break-words">{form.name}</h2>
+						<h3 class="fl-card__title break-words">{form.name}</h3>
 						<p class="fl-card__meta">{countSubmissions(form.submission_count)}</p>
 						<p class="fl-help mt-1">Created {formatDate(form.created_at)}</p>
 					</a>

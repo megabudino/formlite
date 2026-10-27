@@ -2,6 +2,7 @@ import type { PageServerLoad, Actions } from './$types';
 import { error, fail, redirect } from '@sveltejs/kit';
 import db from '$lib/db';
 import { getWorkspace } from '$lib/server/workspaces';
+import { getOverview, parseRange } from '$lib/server/stats';
 
 interface FormWithCount {
 	id: string;
@@ -11,7 +12,7 @@ interface FormWithCount {
 	submission_count: number;
 }
 
-export const load: PageServerLoad = async ({ params, locals }) => {
+export const load: PageServerLoad = async ({ params, locals, url }) => {
 	const user = locals.user;
 	if (!user) {
 		throw redirect(302, '/auth/login');
@@ -42,7 +43,11 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			name: workspace.name,
 			slug: workspace.slug
 		},
-		forms
+		forms,
+		overview: getOverview(
+			{ userId: user.id, workspaceId: workspace.id },
+			parseRange(url.searchParams.get('range'))
+		)
 	};
 };
 

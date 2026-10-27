@@ -117,6 +117,59 @@ select.fl-input {
 	font-size: 13px;
 }
 
+/* Chart tooltips size to their content instead of wrapping near the right edge */
+.fl-tip {
+	width: max-content;
+	white-space: nowrap;
+}
+
+/* Show code exactly as typed: no ligatures like === → ≡ */
+.fl-codeblock pre {
+	font-variant-ligatures: none;
+}
+
+/* Modal dialog (native <dialog>) */
+.fl-dialog {
+	/* Tailwind's reset zeroes margins; dialogs centre with margin: auto */
+	margin: auto;
+	width: min(880px, calc(100vw - 32px));
+	max-height: calc(100dvh - 48px);
+	padding: 0;
+	border: 1px solid var(--line);
+	border-radius: var(--radius-xl);
+	background: var(--surface);
+	color: var(--text);
+	box-shadow: var(--shadow-md);
+	overflow: hidden;
+}
+.fl-dialog[open] {
+	display: flex;
+	flex-direction: column;
+	animation: fl-dialog-in 180ms var(--fl-ease);
+}
+.fl-dialog::backdrop {
+	background: rgb(4 38 26 / 0.45);
+	backdrop-filter: blur(2px);
+}
+.fl-dialog__head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 16px;
+	padding: 24px 24px 16px;
+	border-bottom: 1px solid var(--line);
+}
+.fl-dialog__body {
+	padding: 24px;
+	overflow-y: auto;
+}
+@keyframes fl-dialog-in {
+	from {
+		opacity: 0;
+		transform: translateY(8px) scale(0.98);
+	}
+}
+
 /* Back link above page titles */
 .fl-back {
 	display: inline-flex;

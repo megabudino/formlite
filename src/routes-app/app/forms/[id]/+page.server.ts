@@ -3,6 +3,7 @@ import type { PageServerLoad, Actions } from './$types';
 import db from '$lib/db';
 import { randomUUID, randomBytes } from 'crypto';
 import { getWorkspace } from '$lib/server/workspaces';
+import { getOverview, parseRange } from '$lib/server/stats';
 import { normalizeAllowedDomain as normalizeDomainEntry } from '$lib/server/origin';
 
 interface Form {
@@ -102,7 +103,14 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 
 	const workspace = form.workspace_id ? getWorkspace(user.id, form.workspace_id) : null;
 
+	const overview = getOverview(
+		{ userId: user.id, formId: form.id },
+		parseRange(url.searchParams.get('range')),
+		0
+	);
+
 	return {
+		overview,
 		form: {
 			id: form.id,
 			name: form.name,

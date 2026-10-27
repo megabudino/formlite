@@ -5,6 +5,17 @@
 		plus: { w: 2.5, d: '<path d="M12 5v14"/><path d="M5 12h14"/>' },
 		'arrow-right': { w: 2.5, d: '<path d="M5 12h14"/><path d="m13 5 7 7-7 7"/>' },
 		'arrow-up-right': { w: 2.5, d: '<path d="M7 17 17 7"/><path d="M7 7h10v10"/>' },
+		'arrow-down-right': { w: 2.5, d: '<path d="M7 7l10 10"/><path d="M17 7v10H7"/>' },
+		minus: { w: 2.5, d: '<path d="M5 12h14"/>' },
+		sparkles: {
+			w: 2,
+			d: '<path d="M9.94 14.06 4 20"/><path d="m12 3 1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/>'
+		},
+		book: {
+			w: 2,
+			d: '<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/>'
+		},
+		activity: { w: 2, d: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>' },
 		check: { w: 3, d: '<polyline points="20 6 9 17 4 12"/>' },
 		'chevron-left': { w: 2, d: '<polyline points="15 18 9 12 15 6"/>' },
 		'chevron-right': { w: 2, d: '<polyline points="9 18 15 12 9 6"/>' },

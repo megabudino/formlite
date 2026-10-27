@@ -1,12 +1,13 @@
 import type { PageServerLoad, Actions } from './$types';
 import { fail, redirect } from '@sveltejs/kit';
 import { listWorkspacesForUser, createWorkspace } from '$lib/server/workspaces';
+import { getOverview, parseRange } from '$lib/server/stats';
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, url }) => {
 	const userId = locals.user?.id;
 
 	if (!userId) {
-		return { workspaces: [] };
+		return { workspaces: [], overview: null };
 	}
 
 	const workspaces = listWorkspacesForUser(userId);
@@ -18,7 +19,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 			slug: w.slug,
 			formCount: w.formCount,
 			createdAt: w.createdAt
-		}))
+		})),
+		overview: getOverview({ userId }, parseRange(url.searchParams.get('range')))
 	};
 };
 
