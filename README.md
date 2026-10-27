@@ -8,7 +8,7 @@ A self-hosted Formspree alternative - multi-tenant form backend with email notif
 - 📝 Create and manage multiple forms
 - 📧 Email notifications via Mailgun
 - 🔗 Webhook integrations with HMAC signatures
-- 🍯 Honeypot spam protection
+- 🍯 Honeypot spam protection, allowed domains and rate limiting
 - 📱 Responsive dashboard
 
 ## Environment Variables
@@ -33,6 +33,14 @@ A self-hosted Formspree alternative - multi-tenant form backend with email notif
 | `TRUSTED_ORIGINS` | Additional origins allowed to log in (comma-separated). Supports wildcards like `https://*.example.com`. | _(none)_ |
 | `NODE_ENV` | Environment mode | `development` |
 | `MAILGUN_REGION` | Mailgun API region (`us` or `eu`) | `us` |
+| `SUBMISSION_RATE_LIMIT_PER_IP` | Max submissions per minute to a form from a single IP. `0` disables. | `10` |
+| `SUBMISSION_RATE_LIMIT_PER_FORM` | Max submissions per minute to a form overall. `0` disables. | `120` |
+| `ADDRESS_HEADER` | Header holding the client IP when running behind a reverse proxy (e.g. `X-Forwarded-For`). See below. | _(none)_ |
+| `XFF_DEPTH` | Number of trusted proxies in front of the app, when `ADDRESS_HEADER=X-Forwarded-For`. | `1` |
+
+### Rate limiting behind a reverse proxy
+
+Submissions are rate limited per client IP. Behind a reverse proxy (Traefik, Nginx, Dokploy, …) the app only sees the proxy's address unless you set `ADDRESS_HEADER=X-Forwarded-For`; without it, all visitors share the same per-IP limit. Counters are kept in memory, so they are per instance and reset on restart.
 
 ### Multi-domain login
 

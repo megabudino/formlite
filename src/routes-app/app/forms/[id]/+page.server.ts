@@ -3,6 +3,7 @@ import type { PageServerLoad, Actions } from './$types';
 import db from '$lib/db';
 import { randomUUID, randomBytes } from 'crypto';
 import { getWorkspace } from '$lib/server/workspaces';
+import { normalizeAllowedDomain as normalizeDomainEntry } from '$lib/server/origin';
 
 interface Form {
 	id: string;
@@ -157,12 +158,25 @@ function isValidEmail(email: string): boolean {
 }
 
 function normalizeAllowedDomain(domain: string): { normalized: string; error?: string } {
-	const normalized = domain.trim().toLowerCase();
-	if (!normalized) {
+	const trimmed = domain.trim().toLowerCase();
+	if (!trimmed) {
 		return { normalized: '', error: 'Domain is required' };
 	}
-	if (/\s/.test(normalized)) {
+	if (/\s/.test(trimmed)) {
 		return { normalized: '', error: 'Domain cannot contain spaces' };
+	}
+	if (trimmed.includes('://') && trimmed.includes('*')) {
+		return {
+			normalized: '',
+			error: 'Wildcards cannot include a scheme. Use *.example.com instead'
+		};
+	}
+	const normalized = normalizeDomainEntry(trimmed);
+	if (!normalized) {
+		return {
+			normalized: '',
+			error: 'Enter a domain (example.com), a wildcard (*.example.com) or an origin (https://example.com)'
+		};
 	}
 	return { normalized };
 }
@@ -280,7 +294,9 @@ export const actions: Actions = {
 		}
 
 		const currentDomains = JSON.parse(form.allowed_domains) as string[];
-		const normalizedDomains = currentDomains.map((domain) => domain.trim().toLowerCase());
+		const normalizedDomains = currentDomains.map(
+			(domain) => normalizeDomainEntry(domain) ?? domain.trim().toLowerCase()
+		);
 
 		if (normalizedDomains.includes(normalized)) {
 			return fail(400, { allowedDomainError: 'This domain is already in the list' });
@@ -300,12 +316,8 @@ export const actions: Actions = {
 		}
 
 		const formData = await request.formData();
-		const domainToRemove = formData.get('domain')?.toString() ?? '';
-		const { normalized, error: domainError } = normalizeAllowedDomain(domainToRemove);
-
-		if (domainError) {
-			return fail(400, { allowedDomainError: domainError });
-		}
+		// Match the stored entry as-is: entries saved before validation existed must stay removable
+		const normalized = (formData.get('domain')?.toString() ?? '').trim().toLowerCase();
 
 		const stmt = db.prepare('SELECT * FROM forms WHERE id = ? AND user_id = ?');
 		const form = stmt.get(params.id, user.id) as Form | undefined;

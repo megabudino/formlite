@@ -4,6 +4,18 @@ import db from '$lib/db';
 import { sendSubmissionEmail } from '$lib/email';
 import { dispatchWebhooks, type Webhook } from '$lib/webhooks';
 import { isOriginAllowed } from '$lib/server/origin';
+import { consumeRateLimit } from '$lib/server/rate-limit';
+
+const RATE_LIMIT_WINDOW_MS = 60_000;
+
+function readLimit(name: string, fallback: number): number {
+	const parsed = Number.parseInt(process.env[name] ?? '', 10);
+	return Number.isNaN(parsed) ? fallback : parsed;
+}
+
+// Max submissions per minute, per form. 0 disables the limit.
+const RATE_LIMIT_PER_IP = readLimit('SUBMISSION_RATE_LIMIT_PER_IP', 10);
+const RATE_LIMIT_PER_FORM = readLimit('SUBMISSION_RATE_LIMIT_PER_FORM', 120);
 
 const baseCorsHeaders = {
 	'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -61,7 +73,8 @@ function logBlockedRequest(
 	formId: string,
 	request: Request,
 	origin: string | null,
-	data: Record<string, unknown>
+	data: Record<string, unknown>,
+	reason: 'origin_not_allowed' | 'honeypot'
 ): void {
 	const ip = getRequestIp(request);
 	const userAgent = request.headers.get('user-agent') || null;
@@ -69,7 +82,7 @@ function logBlockedRequest(
 	const insertStmt = db.prepare(
 		'INSERT INTO blocked_requests (form_id, origin, ip, user_agent, data, reason) VALUES (?, ?, ?, ?, ?, ?)'
 	);
-	insertStmt.run(formId, origin, ip, userAgent, JSON.stringify(data), 'origin_not_allowed');
+	insertStmt.run(formId, origin, ip, userAgent, JSON.stringify(data), reason);
 }
 
 export const OPTIONS: RequestHandler = async ({ params, request }) => {
@@ -90,8 +103,8 @@ export const OPTIONS: RequestHandler = async ({ params, request }) => {
 	const originAllowed = isOriginAllowed(requestOrigin, allowedDomains);
 	const corsHeaders = buildCorsHeaders(allowedDomains, requestOrigin, originAllowed);
 
+	// Preflights carry no payload: the blocked POST never follows, so don't log them
 	if (!originAllowed) {
-		logBlockedRequest(form_id, request, requestOrigin, {});
 		return new Response(null, {
 			status: 403,
 			headers: corsHeaders
@@ -145,7 +158,7 @@ function isAjaxRequest(request: Request): boolean {
 	return acceptHeader.includes('application/json');
 }
 
-export const POST: RequestHandler = async ({ params, request }) => {
+export const POST: RequestHandler = async ({ params, request, getClientAddress }) => {
 	const { form_id } = params;
 	const isAjax = isAjaxRequest(request);
 
@@ -176,44 +189,82 @@ export const POST: RequestHandler = async ({ params, request }) => {
 		throw error(410, 'Form is no longer accepting submissions');
 	}
 
-	const contentType = request.headers.get('content-type') || '';
+	// Prefer the address resolved by the adapter (honours ADDRESS_HEADER / XFF_DEPTH)
+	// over raw headers, which any client can forge
+	let clientAddress: string | null = null;
+	try {
+		clientAddress = getClientAddress();
+	} catch {
+		clientAddress = null;
+	}
 
-	let data: Record<string, unknown>;
+	let rateLimit = clientAddress
+		? consumeRateLimit(`ip:${form_id}:${clientAddress}`, RATE_LIMIT_PER_IP, RATE_LIMIT_WINDOW_MS)
+		: { allowed: true, retryAfterSeconds: 0 };
+	if (rateLimit.allowed) {
+		rateLimit = consumeRateLimit(`form:${form_id}`, RATE_LIMIT_PER_FORM, RATE_LIMIT_WINDOW_MS);
+	}
 
-	if (contentType.includes('application/json')) {
-		try {
-			data = await request.json();
-		} catch {
-			if (isAjax) {
-				return json({ ok: false, error: 'Invalid JSON body' }, { status: 400, headers: corsHeaders });
-			}
-			throw error(400, 'Invalid JSON body');
+	if (!rateLimit.allowed) {
+		const headers = { ...corsHeaders, 'Retry-After': String(rateLimit.retryAfterSeconds) };
+		if (isAjax) {
+			return json({ ok: false, error: 'Too many submissions' }, { status: 429, headers });
 		}
-	} else if (
-		contentType.includes('application/x-www-form-urlencoded') ||
-		contentType.includes('multipart/form-data')
-	) {
-		const formData = await request.formData();
-		data = parseFormData(formData);
-	} else {
-		const formData = await request.formData();
-		data = parseFormData(formData);
+		return new Response('Too many submissions. Please try again later.', { status: 429, headers });
+	}
+
+	const contentType = request.headers.get('content-type') || '';
+	const isJsonBody = contentType.includes('application/json');
+
+	let data: Record<string, unknown> | null = null;
+
+	try {
+		if (isJsonBody) {
+			const parsed: unknown = await request.json();
+			if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+				data = parsed as Record<string, unknown>;
+			}
+		} else {
+			data = parseFormData(await request.formData());
+		}
+	} catch {
+		data = null;
+	}
+
+	if (!data) {
+		const message = isJsonBody ? 'Invalid JSON body' : 'Invalid form body';
+		if (isAjax) {
+			return json({ ok: false, error: message }, { status: 400, headers: corsHeaders });
+		}
+		throw error(400, message);
 	}
 
 	const { _gotcha, ...cleanData } = data;
 
 	if (!originAllowed) {
-		logBlockedRequest(form_id, request, requestOrigin, cleanData);
+		logBlockedRequest(form_id, request, requestOrigin, cleanData, 'origin_not_allowed');
 		return json(
 			{ ok: false, error: 'Origin not allowed' },
 			{ status: 403, headers: corsHeaders }
 		);
 	}
 
-	// Honeypot spam filter: if _gotcha has any value, it's likely a bot
-	// Return 200 OK to fool the bot, but don't store the submission
-	if (_gotcha !== undefined && _gotcha !== '') {
-		return json({ ok: true }, { headers: corsHeaders });
+	// Same response for accepted submissions and honeypot hits, so bots can't tell them apart
+	const respondSuccess = () => {
+		if (isAjax) {
+			return json({ ok: true }, { headers: corsHeaders });
+		}
+
+		// For non-AJAX (HTML form posts), redirect to custom URL or default thank-you page
+		const redirectUrl = form.redirect_url || '/thanks';
+		throw redirect(303, redirectUrl);
+	};
+
+	// Honeypot spam filter: if _gotcha has any value, it's likely a bot.
+	// Log it to the Spam tab (browser autofill can trip it too) but don't deliver it
+	if (_gotcha !== undefined && _gotcha !== null && _gotcha !== '') {
+		logBlockedRequest(form_id, request, requestOrigin, cleanData, 'honeypot');
+		return respondSuccess();
 	}
 
 	// Build meta object with request headers
@@ -271,12 +322,5 @@ export const POST: RequestHandler = async ({ params, request }) => {
 		});
 	}
 
-	// Return JSON response for AJAX requests
-	if (isAjax) {
-		return json({ ok: true }, { headers: corsHeaders });
-	}
-
-	// For non-AJAX (HTML form posts), redirect to custom URL or default thank-you page
-	const redirectUrl = form.redirect_url || '/thanks';
-	throw redirect(303, redirectUrl);
+	return respondSuccess();
 };
