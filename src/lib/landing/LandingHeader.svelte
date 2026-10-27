@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Icon, Mark, ThemeToggle } from '$lib/ui';
+	import { Icon, Mark } from '$lib/ui';
 
 	type CtaProps = {
 		label: string;
@@ -24,7 +24,6 @@
 		</a>
 
 		<div class="flex items-center gap-1 sm:gap-2">
-			<ThemeToggle />
 			{#if cta}
 				<a
 					href={cta.href}

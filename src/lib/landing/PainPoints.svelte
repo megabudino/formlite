@@ -23,14 +23,9 @@
 		<SectionHead {eyebrow} {title} {subhead} />
 
 		<div class="mt-12 grid gap-4 sm:mt-16 md:grid-cols-3">
-			{#each items as item, i}
+			{#each items as item (item.title)}
 				<article class="fl-card !flex flex-col">
-					<div class="fl-card__head">
-						<span class="fl-card__tile"><Icon name={item.icon} size={20} /></span>
-						<span class="font-mono text-xs font-medium text-fg-subtle">
-							{String(i + 1).padStart(2, '0')}
-						</span>
-					</div>
+					<span class="fl-card__tile"><Icon name={item.icon} size={20} /></span>
 					<h3 class="fl-card__title">{item.title}</h3>
 					<p class="mt-3 text-[15px] leading-relaxed text-fg-muted">{item.body}</p>
 				</article>

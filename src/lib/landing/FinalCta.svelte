@@ -48,7 +48,7 @@
 			{/if}
 
 			<h2
-				class="mt-5 font-display text-[clamp(2.5rem,7vw,4.5rem)] leading-[0.98] font-extrabold tracking-[-0.04em] text-white"
+				class="{eyebrow ? 'mt-5' : ''} font-display text-[clamp(2.5rem,7vw,4.5rem)] leading-[0.98] font-extrabold tracking-[-0.04em] text-white"
 			>
 				{title}
 			</h2>
@@ -57,12 +57,14 @@
 				<p class="mt-6 max-w-xl text-lg leading-relaxed opacity-85">{body}</p>
 			{/if}
 
-			<div class="mt-9 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+			<!-- Call to action and its note share one column: the note sits centred under the button -->
+			<div class="mt-9 flex flex-col sm:inline-flex">
+			<div class="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
 				<a
 					href={primaryCta.href}
 					target={primaryCta.external ? '_blank' : undefined}
 					rel={primaryCta.external ? 'noopener' : undefined}
-					class="fl-btn fl-btn--primary fl-btn--lg"
+					class="fl-btn fl-btn--primary fl-btn--lg sm:flex-1"
 				>
 					<Icon name="github" />
 					{primaryCta.label}
@@ -81,10 +83,13 @@
 			</div>
 
 			{#if note}
-				<p class="mt-6 font-mono text-[11px] font-medium tracking-[0.12em] uppercase opacity-70">
+				<p
+					class="m-0 mt-5 text-center font-mono text-[11px] font-medium tracking-[0.12em] uppercase opacity-70 sm:whitespace-nowrap"
+				>
 					{note}
 				</p>
 			{/if}
+			</div>
 		</div>
 	</div>
 </section>

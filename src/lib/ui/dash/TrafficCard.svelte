@@ -8,13 +8,11 @@
 	let {
 		totals,
 		range,
-		series,
-		note = ''
+		series
 	}: {
 		totals: Overview['totals'];
 		range: Overview['range'];
 		series: Series | null;
-		note?: string;
 	} = $props();
 
 	const metrics = $derived([
@@ -38,16 +36,13 @@
 </script>
 
 <section class="fl-card flex flex-col gap-5">
-	<div class="flex flex-wrap items-start justify-between gap-x-8 gap-y-4">
-		<div>
-			<h2 class="fl-h2">Traffic</h2>
-			<p class="fl-subtle m-0 mt-1 text-sm">{note || rangeLabel(range)}</p>
-		</div>
-		<div class="flex flex-wrap gap-x-8 gap-y-3">
+	<div class="flex flex-wrap items-start gap-x-10 gap-y-4">
+		<h2 class="sr-only">Traffic, {rangeLabel(range)}</h2>
+		<div class="grid w-full grid-cols-2 gap-x-6 gap-y-3 sm:flex sm:w-auto sm:gap-x-10">
 			{#each metrics as m (m.label)}
 				{@const tone =
 					m.delta.direction === 'flat' ? '' : m.delta.direction === m.goodWhen ? 'fl-delta--good' : 'fl-delta--bad'}
-				<div class="grid gap-1">
+				<div class="grid min-w-0 gap-1">
 					<span class="fl-overline flex items-center gap-2">
 						<i class="inline-block h-2.5 w-2.5 rounded-[3px]" style="background: var(--chart-{m.slot})"></i>
 						{m.label}

@@ -7,6 +7,11 @@
 		'arrow-up-right': { w: 2.5, d: '<path d="M7 17 17 7"/><path d="M7 7h10v10"/>' },
 		'arrow-down-right': { w: 2.5, d: '<path d="M7 7l10 10"/><path d="M17 7v10H7"/>' },
 		minus: { w: 2.5, d: '<path d="M5 12h14"/>' },
+		dollar: {
+			w: 2,
+			d: '<line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'
+		},
+		menu: { w: 2, d: '<path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/>' },
 		sparkles: {
 			w: 2,
 			d: '<path d="M9.94 14.06 4 20"/><path d="m12 3 1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/>'

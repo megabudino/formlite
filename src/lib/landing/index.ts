@@ -1,6 +1,7 @@
 export { default as LandingHeader } from './LandingHeader.svelte';
 export { default as Hero } from './Hero.svelte';
 export { default as PainPoints } from './PainPoints.svelte';
+export { default as ProductShowcase } from './ProductShowcase.svelte';
 export { default as Bridge } from './Bridge.svelte';
 export { default as CoreOffer } from './CoreOffer.svelte';
 export { default as Reviews } from './Reviews.svelte';

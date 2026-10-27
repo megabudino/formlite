@@ -15,6 +15,8 @@
 		primaryCta?: CtaProps;
 		secondaryCta?: CtaProps;
 		note?: string;
+		/** Small mono line under the call to action */
+		footnote?: string;
 		endpoint?: string;
 	};
 
@@ -26,21 +28,33 @@
 		primaryCta,
 		secondaryCta,
 		note,
+		footnote,
 		endpoint = 'https://forms.example.com/s/f_8k2m1q'
 	}: Props = $props();
 </script>
 
-<section class="relative overflow-hidden">
+<!-- Fills the first screen below the 68px header (+1px border). On desktop the content sits a little
+     above the true middle (more padding below than above), which reads as optically centred. -->
+<section class="relative flex min-h-[calc(100svh-69px)] items-center overflow-hidden">
 	<div
-		class="mx-auto grid max-w-[1200px] items-center gap-14 px-4 pt-14 pb-20 sm:px-6 sm:pt-20 sm:pb-28 lg:grid-cols-[1.08fr_1fr] lg:gap-16"
+		class="mx-auto grid w-full max-w-[1200px] items-center gap-14 px-4 py-14 sm:px-6 sm:py-16 lg:grid-cols-[1.08fr_1fr] lg:gap-16 lg:pt-10 lg:pb-[6.5rem]"
 	>
 		<div class="min-w-0">
 			{#if eyebrow}
 				<span class="fl-badge fl-badge--live">{eyebrow}</span>
 			{/if}
+			{#if note}
+				<p
+					class="m-0 inline-flex max-w-xl rounded-full bg-amber-tint px-4 py-2 text-sm leading-5 font-semibold text-on-amber-tint {eyebrow
+						? 'mt-3'
+						: ''}"
+				>
+					{note}
+				</p>
+			{/if}
 
 			<h1
-				class="mt-7 font-display text-[clamp(3.25rem,10vw,5.25rem)] leading-[0.94] font-extrabold tracking-[-0.04em]"
+				class="{eyebrow || note ? 'mt-7' : ''} font-display text-[clamp(3.25rem,10vw,5.25rem)] leading-[0.94] font-extrabold tracking-[-0.04em]"
 			>
 				{headline}
 				{#if highlight}
@@ -55,20 +69,23 @@
 				{subhead}
 			</p>
 
+			<!-- Call to action and its footnote share one column: the footnote sits centred under the button -->
+			<div class="mt-9 flex flex-col sm:inline-flex">
 			{#if primaryCta || secondaryCta}
-				<div class="mt-9 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+				<div class="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
 					{#if primaryCta}
 						<a
 							href={primaryCta.href}
 							target={primaryCta.external ? '_blank' : undefined}
 							rel={primaryCta.external ? 'noopener' : undefined}
-							class="fl-btn fl-btn--primary fl-btn--lg group"
+							class="fl-btn fl-btn--primary fl-btn--lg group sm:flex-1"
 						>
 							<Icon name="github" />
 							{primaryCta.label}
 							<Icon name="arrow-right" class="transition-transform duration-140 group-hover:translate-x-0.5" />
 						</a>
 					{/if}
+
 					{#if secondaryCta}
 						<a
 							href={secondaryCta.href}
@@ -82,9 +99,12 @@
 				</div>
 			{/if}
 
-			{#if note}
-				<p class="fl-overline mt-6">{note}</p>
+			{#if footnote}
+				<p class="fl-overline m-0 mt-5 text-center sm:whitespace-nowrap">{footnote}</p>
 			{/if}
+			</div>
+
+
 		</div>
 
 		<!-- Product glimpse: the endpoint and the snippet, staged on the mark's own shapes -->
@@ -102,10 +122,6 @@
 			</div>
 
 			<div class="fl-card relative !grid grid-cols-1 gap-4 !p-4 !shadow-lift sm:!p-6">
-				<div class="flex items-center justify-between gap-3">
-					<span class="fl-overline">Your endpoint</span>
-					<span class="fl-badge fl-badge--live">Live</span>
-				</div>
 				<div class="fl-endpoint !pr-4">
 					<span class="fl-endpoint__verb">POST</span>
 					<span class="fl-endpoint__url">{endpoint}</span>
@@ -113,10 +129,6 @@
 				<div class="fl-codeblock hero-code">
 					<div class="fl-codeblock__bar">
 						<span class="fl-codeblock__name">index.html</span>
-						<span class="flex gap-1.5" aria-hidden="true">
-							<i class="h-2 w-2 rounded-full bg-brand-mint"></i>
-							<i class="h-2 w-2 rounded-full bg-amber"></i>
-						</span>
 					</div>
 					<pre><span class="k">&lt;form</span> action=<span class="s">"{endpoint}"</span>
       method=<span class="s">"POST"</span><span class="k">&gt;</span>

@@ -5,7 +5,7 @@
 
 	// Split screen for login and setup: a forest slab with the mark's bars on wide screens,
 	// the form card on the right. On phones only the form shows.
-	let { children, kicker, title }: { children: Snippet; kicker: string; title: string } = $props();
+	let { children, kicker = '', title }: { children: Snippet; kicker?: string; title: string } = $props();
 </script>
 
 <div class="grid min-h-screen bg-bg lg:grid-cols-[1fr_minmax(480px,1fr)]">
@@ -57,8 +57,8 @@
 		</div>
 		<div class="flex flex-1 items-center justify-center py-10">
 			<div class="w-full max-w-[420px]">
-				<span class="fl-overline">{kicker}</span>
-				<h1 class="fl-h1 mt-1.5">{title}</h1>
+				{#if kicker}<span class="fl-overline mb-1.5 block">{kicker}</span>{/if}
+				<h1 class="fl-h1">{title}</h1>
 				{@render children()}
 			</div>
 		</div>

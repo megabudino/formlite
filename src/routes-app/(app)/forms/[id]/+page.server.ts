@@ -2,8 +2,7 @@ import { error, redirect, fail } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
 import db from '$lib/db';
 import { randomUUID, randomBytes } from 'crypto';
-import { getWorkspace } from '$lib/server/workspaces';
-import { getOverview, parseRange } from '$lib/server/stats';
+import { getWorkspace, listWorkspaceForms } from '$lib/server/workspaces';
 import { normalizeAllowedDomain as normalizeDomainEntry } from '$lib/server/origin';
 
 interface Form {
@@ -115,14 +114,8 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 
 	const workspace = form.workspace_id ? getWorkspace(user.id, form.workspace_id) : null;
 
-	const overview = getOverview(
-		{ userId: user.id, formId: form.id },
-		parseRange(url.searchParams.get('range')),
-		0
-	);
-
 	return {
-		overview,
+		navForms: workspace ? listWorkspaceForms(user.id, workspace.id) : [],
 		form: {
 			id: form.id,
 			name: form.name,
@@ -202,6 +195,23 @@ function normalizeAllowedDomain(domain: string): { normalized: string; error?: s
 }
 
 export const actions: Actions = {
+	toggleActive: async ({ params, locals, request }) => {
+		const user = locals.user;
+		if (!user) {
+			throw redirect(302, '/auth/login');
+		}
+
+		const form = db.prepare('SELECT id FROM forms WHERE id = ? AND user_id = ?').get(params.id, user.id);
+		if (!form) {
+			throw error(404, 'Form not found');
+		}
+
+		const isActive = (await request.formData()).get('isActive') === '1' ? 1 : 0;
+		db.prepare('UPDATE forms SET is_active = ? WHERE id = ?').run(isActive, params.id);
+
+		return { toggled: true };
+	},
+
 	updateRedirectUrl: async ({ params, locals, request }) => {
 		const user = locals.user;
 		if (!user) {

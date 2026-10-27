@@ -23,7 +23,7 @@
 		{/if}
 		{#if title}
 			<h2
-				class="mt-4 font-display text-[clamp(2rem,5vw,3.25rem)] leading-[1.04] font-bold tracking-[-0.03em]"
+				class="{eyebrow ? 'mt-4' : ''} font-display text-[clamp(2rem,5vw,3.25rem)] leading-[1.04] font-bold tracking-[-0.03em]"
 			>
 				{title}
 			</h2>

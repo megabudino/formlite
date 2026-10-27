@@ -29,7 +29,7 @@
 
 <section class="mt-20 border-y border-line bg-surface sm:mt-28">
 	<div class="mx-auto max-w-[1200px] px-4 py-20 sm:px-6 sm:py-28">
-		<div class="grid items-start gap-12 lg:grid-cols-[1.1fr_1fr] lg:gap-16">
+		<div class="grid items-start gap-12 lg:grid-cols-[1.1fr_1fr] lg:items-center lg:gap-16">
 			<div class="min-w-0">
 				<SectionHead {eyebrow} {title} />
 				<p class="mt-6 max-w-xl text-lg leading-relaxed text-fg-muted">{body}</p>
@@ -69,8 +69,7 @@
 
 			{#if items.length > 0}
 				<div class="min-w-0">
-					<p class="fl-overline">What you get</p>
-					<ul class="mt-5 grid gap-3 sm:grid-cols-2">
+					<ul class="m-0 grid list-none gap-3 p-0 sm:grid-cols-2 lg:grid-cols-1">
 						{#each items as item}
 							<li
 								class="flex items-center gap-4 rounded-lg border border-line bg-bg p-4 text-[15px] leading-5 font-semibold"

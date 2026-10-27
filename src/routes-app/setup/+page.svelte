@@ -26,7 +26,7 @@
 	<title>Set up Formlite</title>
 </svelte:head>
 
-<AuthShell kicker="First run · 1 minute" title="Set up Formlite">
+<AuthShell title="Set up Formlite">
 	<p class="fl-muted mt-1.5">Create the admin account for this server.</p>
 
 	<div class="mt-8 grid gap-5">

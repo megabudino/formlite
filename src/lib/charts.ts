@@ -26,7 +26,12 @@ function nice(max: number): number {
 	const q = max / 4;
 	const p = Math.pow(10, Math.floor(Math.log10(q)));
 	const m = q / p;
-	for (const st of [1, 1.5, 2, 2.5, 3, 4, 5, 7.5, 10]) if (m <= st) return st * p * 4;
+	// Steps that give whole-number gridlines (no 7.5 or 2.5 when counting single items)
+	for (const st of [1, 1.5, 2, 2.5, 3, 4, 5, 6, 7.5, 8, 10]) {
+		const step = st * p;
+		if (step >= 1 && !Number.isInteger(step)) continue;
+		if (m <= st) return step * 4;
+	}
 	return 40 * p;
 }
 

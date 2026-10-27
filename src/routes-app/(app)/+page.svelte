@@ -14,7 +14,6 @@
 	let greeting = $state('Welcome back');
 
 	const firstName = $derived(data.user?.name?.split(/\s+/)[0] ?? '');
-	const totalForms = $derived(data.workspaces.reduce((sum, w) => sum + w.formCount, 0));
 
 	onMount(() => {
 		// Greet in the viewer's own time zone, so this runs in the browser only.
@@ -49,12 +48,7 @@
 <div class="grid grid-cols-[minmax(0,1fr)] gap-8">
 	<div class="flex flex-wrap items-end justify-between gap-4">
 		<div>
-			<span class="fl-overline">
-				{data.workspaces.length === 1 ? '1 workspace' : `${data.workspaces.length} workspaces`} · {countForms(
-					totalForms
-				).toLowerCase()}
-			</span>
-			<h1 class="fl-h1 mt-1.5">{greeting}{firstName ? `, ${firstName}` : ''}</h1>
+			<h1 class="fl-h1">{greeting}{firstName ? `, ${firstName}` : ''}</h1>
 		</div>
 		{#if data.workspaces.length > 0}
 			<button type="button" onclick={openCreate} class="fl-btn fl-btn--primary">

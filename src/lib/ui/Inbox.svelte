@@ -25,7 +25,8 @@
 		deleteAction,
 		empty,
 		toolbar,
-		pager
+		pager,
+		paged = false
 	}: {
 		items: InboxItem[];
 		kind: 'submission' | 'blocked';
@@ -35,6 +36,8 @@
 		empty: Snippet;
 		toolbar?: Snippet;
 		pager?: Snippet;
+		/** More than one page: show the pager row */
+		paged?: boolean;
 	} = $props();
 
 	const noun = $derived(kind === 'submission' ? ['submission', 'submissions'] : ['request', 'requests']);
@@ -211,7 +214,7 @@
 	{/if}
 
 	{#if items.length === 0}
-		<div class="p-4">{@render empty()}</div>
+		<div class="fl-inbox__empty p-4">{@render empty()}</div>
 	{:else}
 		<div class="fl-inbox__body">
 			<!-- List -->
@@ -258,7 +261,7 @@
 		</div>
 	{/if}
 
-	{#if pager}
+	{#if pager && paged}
 		<div class="px-4 pb-4">{@render pager()}</div>
 	{/if}
 </section>

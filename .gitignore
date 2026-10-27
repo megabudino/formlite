@@ -26,3 +26,10 @@ vite.config.ts.timestamp-*
 /data
 formlite-design-system.zip
 .claude/launch.json
+screenshots/formlite-dashboard-light.png
+screenshots/formlite-dashboard-mobile.png
+screenshots/formlite-dashboard-tile-light.png
+screenshots/formlite-inbox-light.png
+screenshots/formlite-inbox-mobile.png
+screenshots/formlite-overview-light.png
+screenshots/formlite-overview-mobile.png
