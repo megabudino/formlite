@@ -24,3 +24,5 @@ vite.config.ts.timestamp-*
 
 # Database
 /data
+formlite-design-system.zip
+.claude/launch.json

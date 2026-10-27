@@ -56,6 +56,15 @@ function isValidUrl(url: string): boolean {
 
 const SUBMISSIONS_PER_PAGE = 20;
 
+// Positive integer ids from repeated `id` fields, capped to one page's worth plus margin.
+function parseIds(formData: FormData): number[] {
+	const ids = formData
+		.getAll('id')
+		.map((v) => Number.parseInt(String(v), 10))
+		.filter((n) => Number.isInteger(n) && n > 0);
+	return [...new Set(ids)].slice(0, 500);
+}
+
 export const load: PageServerLoad = async ({ params, locals, url }) => {
 	const user = locals.user;
 	if (!user) {
@@ -73,24 +82,27 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 	const webhooks = webhooksStmt.all(params.id) as Webhook[];
 
 	// Fetch submissions with pagination
-	const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
-	const offset = (page - 1) * SUBMISSIONS_PER_PAGE;
-
 	const countStmt = db.prepare('SELECT COUNT(*) as count FROM submissions WHERE form_id = ?');
 	const { count: totalSubmissions } = countStmt.get(params.id) as { count: number };
 	const totalPages = Math.ceil(totalSubmissions / SUBMISSIONS_PER_PAGE);
+
+	// Clamp to the last page, so deleting the final rows of a page doesn't strand you on an empty one
+	const requestedPage = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10) || 1);
+	const page = Math.min(requestedPage, Math.max(1, totalPages));
+	const offset = (page - 1) * SUBMISSIONS_PER_PAGE;
 
 	const submissionsStmt = db.prepare(
 		'SELECT * FROM submissions WHERE form_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?'
 	);
 	const submissions = submissionsStmt.all(params.id, SUBMISSIONS_PER_PAGE, offset) as Submission[];
 
-	const spamPage = Math.max(1, parseInt(url.searchParams.get('spam_page') || '1', 10));
-	const spamOffset = (spamPage - 1) * SUBMISSIONS_PER_PAGE;
-
 	const blockedCountStmt = db.prepare('SELECT COUNT(*) as count FROM blocked_requests WHERE form_id = ?');
 	const { count: totalBlockedRequests } = blockedCountStmt.get(params.id) as { count: number };
 	const blockedTotalPages = Math.ceil(totalBlockedRequests / SUBMISSIONS_PER_PAGE);
+
+	const requestedSpamPage = Math.max(1, parseInt(url.searchParams.get('spam_page') || '1', 10) || 1);
+	const spamPage = Math.min(requestedSpamPage, Math.max(1, blockedTotalPages));
+	const spamOffset = (spamPage - 1) * SUBMISSIONS_PER_PAGE;
 
 	const blockedStmt = db.prepare(
 		'SELECT * FROM blocked_requests WHERE form_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?'
@@ -342,6 +354,57 @@ export const actions: Actions = {
 		updateStmt.run(JSON.stringify(updatedDomains), params.id);
 
 		return { allowedDomainSuccess: true };
+	},
+
+	deleteSubmissions: async ({ params, locals, request }) => {
+		const user = locals.user;
+		if (!user) {
+			throw redirect(302, '/auth/login');
+		}
+
+		const form = db.prepare('SELECT id FROM forms WHERE id = ? AND user_id = ?').get(params.id, user.id);
+		if (!form) {
+			throw error(404, 'Form not found');
+		}
+
+		const ids = parseIds(await request.formData());
+		if (ids.length === 0) {
+			return fail(400, { deleteError: 'Select at least one submission to delete' });
+		}
+
+		// form_id in the WHERE keeps deletions scoped to this form, whatever ids are sent
+		const result = db
+			.prepare(
+				`DELETE FROM submissions WHERE form_id = ? AND id IN (${ids.map(() => '?').join(',')})`
+			)
+			.run(params.id, ...ids);
+
+		return { deletedSubmissions: result.changes };
+	},
+
+	deleteBlockedRequests: async ({ params, locals, request }) => {
+		const user = locals.user;
+		if (!user) {
+			throw redirect(302, '/auth/login');
+		}
+
+		const form = db.prepare('SELECT id FROM forms WHERE id = ? AND user_id = ?').get(params.id, user.id);
+		if (!form) {
+			throw error(404, 'Form not found');
+		}
+
+		const ids = parseIds(await request.formData());
+		if (ids.length === 0) {
+			return fail(400, { deleteError: 'Select at least one request to delete' });
+		}
+
+		const result = db
+			.prepare(
+				`DELETE FROM blocked_requests WHERE form_id = ? AND id IN (${ids.map(() => '?').join(',')})`
+			)
+			.run(params.id, ...ids);
+
+		return { deletedBlocked: result.changes };
 	},
 
 	clearBlockedRequests: async ({ params, locals }) => {

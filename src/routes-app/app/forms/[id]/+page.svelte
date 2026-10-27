@@ -6,6 +6,7 @@
 	import { onMount } from 'svelte';
 	import { Icon } from '$lib/ui';
 	import IntegrationGuide from '$lib/ui/IntegrationGuide.svelte';
+	import Inbox from '$lib/ui/Inbox.svelte';
 	import StatCard from '$lib/ui/dash/StatCard.svelte';
 	import RangeSelect from '$lib/ui/dash/RangeSelect.svelte';
 	import { chart } from '$lib/charts';
@@ -15,7 +16,6 @@
 		computeDelta,
 		parseUtc,
 		rangeLabel,
-		reasonLabel,
 		timeAgo
 	} from '$lib/stats';
 
@@ -77,8 +77,6 @@
 	let revealedSecrets = $state<Set<string>>(new Set());
 	let showDeleteConfirm = $state(false);
 	let deleteConfirmName = $state('');
-	let expandedSubmissions = $state<Set<number>>(new Set());
-	let expandedBlockedRequests = $state<Set<number>>(new Set());
 
 	const actionUrl = $derived(`${$page.url.origin}/s/${data.form.id}`);
 	const ov = $derived(data.overview);
@@ -131,16 +129,6 @@
 		if (next.has(value)) next.delete(value);
 		else next.add(value);
 		return next;
-	}
-
-	function formatDateTime(dateStr: string) {
-		return parseUtc(dateStr).toLocaleString(undefined, {
-			month: 'short',
-			day: 'numeric',
-			year: 'numeric',
-			hour: '2-digit',
-			minute: '2-digit'
-		});
 	}
 
 	function formatDate(dateStr: string) {
@@ -347,211 +335,93 @@
 
 		<div id="panel-{activeTab}" role="tabpanel" aria-labelledby="tab-{activeTab}">
 			{#if activeTab === 'submissions'}
-				<section class="fl-card grid gap-5">
-					<div>
-						<h2 class="fl-h2">Submissions</h2>
-						<p class="fl-muted mt-1">
-							{#if data.pagination.totalSubmissions > 0}
-								{plural(data.pagination.totalSubmissions, 'submission', 'submissions')} received, newest
-								first.
-							{:else}
-								Everything people send through this form shows up here.
-							{/if}
-						</p>
-					</div>
-
-					{#if data.submissions.length === 0}
+				<Inbox
+					items={data.submissions}
+					kind="submission"
+					total={data.pagination.totalSubmissions}
+					formName={data.form.name}
+					deleteAction="?/deleteSubmissions"
+				>
+					{#snippet empty()}
 						<div class="grid place-items-center rounded-md bg-surface-2 px-6 py-12 text-center">
 							<span class="fl-card__tile"><Icon name="inbox" /></span>
 							<p class="mt-3 font-semibold">No submissions yet</p>
-							<p class="fl-muted mt-1 max-w-xs text-sm">
-								They'll show up here as they arrive.
-							</p>
+							<p class="fl-muted mt-1 max-w-xs text-sm">They'll show up here as they arrive.</p>
 						</div>
-					{:else}
-						<div class="grid gap-2">
-							{#each data.submissions as submission (submission.id)}
-								{@const dataKeys = Object.keys(submission.data)}
-								{@const previewKeys = dataKeys.slice(0, 3)}
-								{@const isExpanded = expandedSubmissions.has(submission.id)}
-								<div class="fl-row" data-open={isExpanded}>
-									<button
-										type="button"
-										class="fl-row__head"
-										aria-expanded={isExpanded}
-										onclick={() => (expandedSubmissions = toggleInSet(expandedSubmissions, submission.id))}
-									>
-										<span class="fl-row__chev"><Icon name="chevron-right" size={16} /></span>
-										<div class="flex min-w-0 flex-1 flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-5">
-											<span class="flex-none font-mono text-xs font-medium text-fg-muted sm:w-40">
-												{formatDateTime(submission.createdAt)}
-											</span>
-											<span class="flex min-w-0 flex-1 flex-wrap gap-x-4 gap-y-1 text-sm">
-												{#each previewKeys as key}
-													<span class="flex min-w-0 max-w-[240px] gap-1.5">
-														<span class="flex-none text-fg-subtle">{key}</span>
-														<span class="truncate">{String(submission.data[key])}</span>
-													</span>
-												{/each}
-												{#if dataKeys.length > 3}
-													<span class="fl-badge fl-badge--off fl-badge--plain">+{dataKeys.length - 3}</span>
-												{/if}
-											</span>
-										</div>
-									</button>
-
-									{#if isExpanded}
-										<div class="fl-row__body grid gap-5">
-											<div>
-												<span class="fl-overline">Form data</span>
-												<dl class="fl-dl mt-2">
-													{#each Object.entries(submission.data) as [key, value]}
-														<dt>{key}</dt>
-														<dd>{String(value)}</dd>
-													{/each}
-												</dl>
-											</div>
-											{#if Object.keys(submission.meta).length > 0}
-												<div>
-													<span class="fl-overline">Metadata</span>
-													<dl class="fl-dl mt-2 text-fg-muted">
-														{#each Object.entries(submission.meta) as [key, value]}
-															<dt>{key}</dt>
-															<dd class="font-mono !text-[13px]">{String(value)}</dd>
-														{/each}
-													</dl>
-												</div>
-											{/if}
-										</div>
-									{/if}
-								</div>
-							{/each}
-						</div>
-
+					{/snippet}
+					{#snippet pager()}
 						{#if data.pagination.totalPages > 1}
-							{@render pager(data.pagination.page, data.pagination.totalPages, data.pagination.hasPrevPage, data.pagination.hasNextPage, 'page')}
+							{@render pageNav(data.pagination.page, data.pagination.totalPages, data.pagination.hasPrevPage, data.pagination.hasNextPage, 'page')}
 						{/if}
-					{/if}
-				</section>
+					{/snippet}
+				</Inbox>
 			{:else if activeTab === 'spam'}
-				<section class="fl-card grid gap-5">
-					<div class="flex flex-wrap items-start justify-between gap-4">
-						<div>
-							<h2 class="fl-h2">Spam</h2>
-							<p class="fl-muted mt-1">
-								{#if data.blockedPagination.totalBlockedRequests > 0}
-									{plural(data.blockedPagination.totalBlockedRequests, 'request', 'requests')} blocked.
-									They never reached your inbox.
-								{:else}
-									Requests that fail the honeypot, origin or rate-limit checks land here.
-								{/if}
-							</p>
-						</div>
-						{#if data.blockedPagination.totalBlockedRequests > 0}
-							<form
-								method="POST"
-								action="?/clearBlockedRequests"
-								use:enhance={() => {
-									spamClearing = true;
-									spamCleared = false;
-									return async ({ update, result }) => {
-										spamClearing = false;
-										if (result.type === 'success') {
-											spamCleared = true;
-											setTimeout(() => {
-												spamCleared = false;
-											}, 3000);
-										}
-										await update();
-									};
-								}}
-							>
-								<button
-									type="submit"
-									disabled={spamClearing}
-									onclick={(event) => {
-										if (!confirm('Clear all blocked requests?')) {
-											event.preventDefault();
-										}
-									}}
-									class="fl-btn fl-btn--danger-soft fl-btn--sm"
-								>
-									<Icon name="trash" size={16} />
-									{#if spamClearing}
-										Clearing…
-									{:else}
-										Clear spam
-									{/if}
-								</button>
-							</form>
-						{/if}
-					</div>
-
+				<div class="grid gap-4">
 					{#if spamCleared}
 						<div class="fl-alert fl-alert--success" role="status">
 							<Icon name="check-circle" size={20} class="fl-alert__icon" />
 							<div><strong>Spam cleared.</strong> New blocked requests will show up here.</div>
 						</div>
 					{/if}
-
-					{#if data.blockedRequests.length === 0}
-						<div class="grid place-items-center rounded-md bg-surface-2 px-6 py-12 text-center">
-							<span class="fl-card__tile"><Icon name="shield" /></span>
-							<p class="mt-3 font-semibold">No blocked requests</p>
-							<p class="fl-muted mt-1 max-w-xs text-sm">Nothing suspicious so far.</p>
-						</div>
-					{:else}
-						<div class="grid gap-2">
-							{#each data.blockedRequests as blocked (blocked.id)}
-								{@const dataEntries = Object.entries(blocked.data)}
-								{@const isExpanded = expandedBlockedRequests.has(blocked.id)}
-								<div class="fl-row" data-open={isExpanded}>
+					<Inbox
+						items={data.blockedRequests}
+						kind="blocked"
+						total={data.blockedPagination.totalBlockedRequests}
+						formName={data.form.name}
+						deleteAction="?/deleteBlockedRequests"
+					>
+						{#snippet toolbar()}
+							{#if data.blockedPagination.totalBlockedRequests > 0}
+								<form
+									method="POST"
+									action="?/clearBlockedRequests"
+									use:enhance={() => {
+										spamClearing = true;
+										spamCleared = false;
+										return async ({ update, result }) => {
+											spamClearing = false;
+											if (result.type === 'success') {
+												spamCleared = true;
+												setTimeout(() => {
+													spamCleared = false;
+												}, 3000);
+											}
+											await update();
+										};
+									}}
+								>
 									<button
-										type="button"
-										class="fl-row__head"
-										aria-expanded={isExpanded}
-										onclick={() => (expandedBlockedRequests = toggleInSet(expandedBlockedRequests, blocked.id))}
+										type="submit"
+										disabled={spamClearing}
+										onclick={(event) => {
+											if (!confirm('Clear all blocked requests?')) {
+												event.preventDefault();
+											}
+										}}
+										class="fl-btn fl-btn--ghost fl-btn--sm"
 									>
-										<span class="fl-row__chev"><Icon name="chevron-right" size={16} /></span>
-										<div class="flex min-w-0 flex-1 flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-5">
-											<span class="flex-none font-mono text-xs font-medium text-fg-muted sm:w-40">
-												{formatDateTime(blocked.createdAt)}
-											</span>
-											<span class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-												<span class="min-w-0 truncate font-mono text-[13px]">
-													{blocked.origin ?? 'Unknown origin'}
-												</span>
-												<span class="fl-badge fl-badge--spam">
-													{reasonLabel(blocked.reason)}
-												</span>
-											</span>
-										</div>
+										<Icon name="trash" size={16} />
+										{spamClearing ? 'Clearing…' : 'Clear all spam'}
 									</button>
-
-									{#if isExpanded}
-										<div class="fl-row__body">
-											<span class="fl-overline">Blocked payload</span>
-											{#if dataEntries.length === 0}
-												<p class="fl-subtle mt-2 text-sm">No payload captured.</p>
-											{:else}
-												<dl class="fl-dl mt-2">
-													{#each dataEntries as [key, value]}
-														<dt>{key}</dt>
-														<dd>{String(value)}</dd>
-													{/each}
-												</dl>
-											{/if}
-										</div>
-									{/if}
-								</div>
-							{/each}
-						</div>
-
-						{#if data.blockedPagination.totalPages > 1}
-							{@render pager(data.blockedPagination.page, data.blockedPagination.totalPages, data.blockedPagination.hasPrevPage, data.blockedPagination.hasNextPage, 'spam_page')}
-						{/if}
-					{/if}
-				</section>
+								</form>
+							{/if}
+						{/snippet}
+						{#snippet empty()}
+							<div class="grid place-items-center rounded-md bg-surface-2 px-6 py-12 text-center">
+								<span class="fl-card__tile"><Icon name="shield" /></span>
+								<p class="mt-3 font-semibold">No blocked requests</p>
+								<p class="fl-muted mt-1 max-w-xs text-sm">
+									Requests that fail the honeypot or origin checks land here.
+								</p>
+							</div>
+						{/snippet}
+						{#snippet pager()}
+							{#if data.blockedPagination.totalPages > 1}
+								{@render pageNav(data.blockedPagination.page, data.blockedPagination.totalPages, data.blockedPagination.hasPrevPage, data.blockedPagination.hasNextPage, 'spam_page')}
+							{/if}
+						{/snippet}
+					</Inbox>
+				</div>
 			{:else if activeTab === 'settings'}
 				<section class="grid gap-4">
 					<div class="fl-card">
@@ -938,7 +808,7 @@
 	</div>
 </dialog>
 
-{#snippet pager(current: number, total: number, hasPrev: boolean, hasNext: boolean, param: string)}
+{#snippet pageNav(current: number, total: number, hasPrev: boolean, hasNext: boolean, param: string)}
 	<nav class="flex items-center justify-between gap-4 border-t border-line pt-5" aria-label="Pagination">
 		{#if hasPrev}
 			<a href="?{param}={current - 1}" class="fl-btn fl-btn--secondary fl-btn--sm">
