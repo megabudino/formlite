@@ -1,16 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" fill="none">
-  <title>Formlite</title>
-  <rect width="128" height="128" rx="28" fill="#0F172A"/>
-  <rect x="22" y="28" width="84" height="72" rx="18" fill="url(#panel)"/>
-  <path d="M42 50H86" stroke="#0F172A" stroke-width="10" stroke-linecap="round"/>
-  <path d="M42 68H74" stroke="#0F172A" stroke-width="10" stroke-linecap="round"/>
-  <path d="M42 86H62" stroke="#0F172A" stroke-width="10" stroke-linecap="round"/>
-  <circle cx="96" cy="96" r="16" fill="#10B981"/>
-  <path d="M89 96H103" stroke="white" stroke-width="6" stroke-linecap="round"/>
-  <defs>
-    <linearGradient id="panel" x1="22" y1="28" x2="106" y2="100" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#6EE7B7"/>
-      <stop offset="1" stop-color="#10B981"/>
-    </linearGradient>
-  </defs>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" fill="none"><title>Formlite</title><g transform="translate(0 0) scale(1)"><rect width="128" height="128" rx="32" fill="#00d68f"/><g fill="#04261a"><rect x="32" y="32" width="64" height="16" rx="8"/><rect x="32" y="56" width="46" height="16" rx="8"/><rect x="32" y="80" width="24" height="16" rx="8"/><circle cx="74" cy="88" r="8"/></g></g></svg>

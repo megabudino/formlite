@@ -1,63 +1,907 @@
 @import 'tailwindcss';
+@import './lib/styles/tokens.css';
+/* In the components layer so Tailwind utilities can override fl- classes (e.g. `fl-card grid`). */
+@import './lib/styles/components.css' layer(components);
 
+/* Make the design-system tokens available as Tailwind utilities (bg-surface, text-fg-muted, border-line…).
+   `inline` keeps the var() reference so light/dark switching through [data-theme] just works. */
+@theme inline {
+	--color-bg: var(--bg);
+	--color-surface: var(--surface);
+	--color-surface-2: var(--surface-2);
+	--color-surface-hover: var(--surface-hover);
+	--color-line: var(--line);
+	--color-line-strong: var(--line-strong);
+	--color-fg: var(--text);
+	--color-fg-muted: var(--text-muted);
+	--color-fg-subtle: var(--text-subtle);
+	--color-accent: var(--accent);
+	--color-accent-hover: var(--accent-hover);
+	--color-on-accent: var(--on-accent);
+	--color-accent-text: var(--accent-text);
+	--color-accent-tint: var(--accent-tint);
+	--color-on-accent-tint: var(--on-accent-tint);
+	--color-amber: var(--amber);
+	--color-on-amber: var(--on-amber);
+	--color-amber-tint: var(--amber-tint);
+	--color-on-amber-tint: var(--on-amber-tint);
+	--color-danger: var(--danger);
+	--color-on-danger: var(--on-danger);
+	--color-danger-tint: var(--danger-tint);
+	--color-on-danger-tint: var(--on-danger-tint);
+	--color-inverse: var(--inverse);
+	--color-on-inverse: var(--on-inverse);
+	--color-brand-mint: var(--brand-mint);
+	--color-brand-forest: var(--brand-forest);
+	--color-chart-1: var(--chart-1);
+	--color-chart-2: var(--chart-2);
+	--color-chart-3: var(--chart-3);
+	--color-chart-4: var(--chart-4);
+
+	--shadow-card: var(--shadow-sm);
+	--shadow-lift: var(--shadow-md);
+	--shadow-glow: var(--shadow-glow);
+}
+
+/* Same values as tokens.css, so Tailwind's font-* and rounded-* utilities match the design system */
 @theme {
-	--font-sans:
-		'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-		'Helvetica Neue', Arial, sans-serif;
-	--font-mono:
-		'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-	--font-display: 'Inter', ui-sans-serif, system-ui, sans-serif;
+	--font-sans: 'Instrument Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+	--font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+	--font-display: 'Bricolage Grotesque', 'Instrument Sans', system-ui, sans-serif;
 
-	--color-mint-50: #ecfdf5;
-	--color-mint-100: #d1fae5;
-	--color-mint-200: #a7f3d0;
-	--color-mint-300: #6ee7b7;
-	--color-mint-400: #34d399;
-	--color-mint-500: #10b981;
-	--color-mint-600: #059669;
-	--color-mint-700: #047857;
-	--color-mint-800: #065f46;
-	--color-mint-900: #064e3b;
-	--color-mint-950: #022c22;
-
-	--color-ink-50: #f8fafc;
-	--color-ink-100: #f1f5f9;
-	--color-ink-200: #e2e8f0;
-	--color-ink-300: #cbd5e1;
-	--color-ink-400: #94a3b8;
-	--color-ink-500: #64748b;
-	--color-ink-600: #475569;
-	--color-ink-700: #334155;
-	--color-ink-800: #1e293b;
-	--color-ink-900: #0f172a;
-
-	--radius-md: 0.5rem;
-	--radius-lg: 0.75rem;
-	--radius-xl: 1rem;
-
-	--shadow-card: 0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px 0 rgb(15 23 42 / 0.06);
-	--shadow-card-hover: 0 4px 12px -2px rgb(15 23 42 / 0.08), 0 2px 6px -2px rgb(15 23 42 / 0.05);
+	--radius-xs: 6px;
+	--radius-sm: 10px;
+	--radius-md: 14px;
+	--radius-lg: 20px;
+	--radius-xl: 28px;
 }
 
 @layer base {
 	html {
-		font-family: var(--font-sans);
-		-webkit-font-smoothing: antialiased;
-		-moz-osx-font-smoothing: grayscale;
-		text-rendering: optimizeLegibility;
+		color-scheme: light;
+	}
+	html[data-theme='dark'] {
+		color-scheme: dark;
 	}
 
+	/* The whole document behaves like the design system's .fl-root */
 	body {
-		background-color: var(--color-ink-50);
-		color: var(--color-ink-800);
+		margin: 0;
+		font-family: var(--font-sans);
+		font-size: 15px;
+		line-height: 22px;
+		color: var(--text);
+		background: var(--bg);
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+		font-variant-numeric: tabular-nums;
 	}
 
 	::selection {
-		background-color: var(--color-mint-200);
-		color: var(--color-mint-900);
+		background: var(--accent);
+		color: var(--on-accent);
+	}
+
+	:focus-visible {
+		outline: 2px solid var(--focus);
+		outline-offset: 2px;
+	}
+
+	h1,
+	h2,
+	h3 {
+		text-wrap: balance;
 	}
 }
 
-@utility focus-ring {
-	@apply outline-none ring-2 ring-mint-500/30 ring-offset-0 border-mint-500;
+@layer components {
+/* --- App-level additions built on the same tokens --- */
+
+/* Native select styled like .fl-input */
+select.fl-input {
+	appearance: none;
+	padding-right: 40px;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23557266' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+	background-repeat: no-repeat;
+	background-position: right 14px center;
+	background-size: 16px;
+	cursor: pointer;
+}
+
+/* Buttons inside mono containers (code block bar, endpoint pill) keep the UI face */
+.fl-codeblock__bar .fl-btn,
+.fl-endpoint .fl-btn {
+	font-family: var(--font-sans);
+	letter-spacing: normal;
+	text-transform: none;
+	font-size: 13px;
+}
+
+/* Fill mode: the chart stretches to the height its card offers (cards in a row share a height).
+   The SVG is taken out of flow so it never pushes the card taller than its neighbours. */
+.fl-chart--fill {
+	position: relative;
+	flex: 1 1 auto;
+	min-height: 220px;
+}
+.fl-chart--fill > svg {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+}
+.fl-heat--fill {
+	flex: 1 1 auto;
+	min-height: 160px;
+	grid-template-rows: repeat(7, minmax(0, 1fr));
+}
+.fl-heat--fill .c {
+	aspect-ratio: auto;
+	height: 100%;
+	min-height: 10px;
+}
+
+/* Chart tooltips size to their content instead of wrapping near the right edge */
+.fl-tip {
+	width: max-content;
+	white-space: nowrap;
+}
+
+/* Show code exactly as typed: no ligatures like === → ≡ */
+.fl-codeblock pre {
+	font-variant-ligatures: none;
+}
+
+/* Checkbox */
+.fl-check {
+	appearance: none;
+	flex: none;
+	width: 18px;
+	height: 18px;
+	margin: 0;
+	border: 1.5px solid var(--line-strong);
+	border-radius: var(--radius-xs);
+	background: var(--surface) center / 12px no-repeat;
+	cursor: pointer;
+	transition:
+		background-color var(--fl-fast) var(--fl-ease),
+		border-color var(--fl-fast) var(--fl-ease);
+}
+.fl-check:hover:not(:disabled) {
+	border-color: var(--accent-text);
+}
+.fl-check:checked,
+.fl-check:indeterminate {
+	border-color: var(--accent);
+	background-color: var(--accent);
+}
+.fl-check:checked {
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2304261a' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E");
+}
+.fl-check:indeterminate {
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2304261a' stroke-width='3.5' stroke-linecap='round'%3E%3Cpath d='M6 12h12'/%3E%3C/svg%3E");
+}
+.fl-check:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+
+/* Inbox: list of submissions with a reading pane */
+.fl-inbox {
+	padding: 0;
+	overflow: hidden;
+}
+.fl-inbox__bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	min-height: 60px;
+	padding: 10px 16px 10px 24px;
+	border-bottom: 1px solid var(--line);
+	transition: background-color var(--fl-fast) var(--fl-ease);
+}
+.fl-inbox__bar[data-selecting='true'] {
+	background: var(--accent-tint);
+	color: var(--on-accent-tint);
+}
+.fl-inbox__body {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+}
+.fl-inbox__list {
+	margin: 0;
+	padding: 8px;
+	list-style: none;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: 2px;
+	align-content: start;
+}
+.fl-inbox__detail {
+	display: none;
+}
+@media (min-width: 1024px) {
+	.fl-inbox__body {
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+	}
+	.fl-inbox__list {
+		border-right: 1px solid var(--line);
+		max-height: max(520px, calc(100dvh - 300px));
+		overflow-y: auto;
+	}
+	.fl-inbox__detail {
+		display: block;
+		padding: 28px;
+		max-height: max(520px, calc(100dvh - 300px));
+		overflow-y: auto;
+	}
+}
+.fl-msg {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding-left: 16px;
+	border-radius: var(--radius-md);
+	transition: background-color var(--fl-fast) var(--fl-ease);
+}
+.fl-msg:hover {
+	background: var(--surface-hover);
+}
+/* Open item (reading pane): a quiet surface. Selected: the mint tint, so a checked row reads at a glance. */
+@media (min-width: 1024px) {
+	.fl-msg[data-active='true'] {
+		background: var(--surface-2);
+	}
+}
+.fl-msg[data-selected='true'],
+.fl-msg[data-selected='true']:hover {
+	background: var(--accent-tint);
+}
+.fl-msg[data-selected='true'] .fl-msg__avatar {
+	background: var(--accent);
+	color: var(--on-accent);
+}
+.fl-msg__open {
+	display: flex;
+	flex: 1;
+	min-width: 0;
+	align-items: center;
+	gap: 12px;
+	padding: 12px 12px 12px 0;
+	border: 0;
+	background: transparent;
+	font: inherit;
+	color: inherit;
+	text-align: left;
+	cursor: pointer;
+	border-radius: var(--radius-md);
+}
+.fl-msg__avatar {
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 36px;
+	height: 36px;
+	border-radius: 50%;
+	background: var(--accent-tint);
+	color: var(--on-accent-tint);
+	font-family: var(--font-display);
+	font-weight: 700;
+	font-size: 15px;
+}
+.fl-msg__avatar[data-kind='blocked'] {
+	background: var(--danger-tint);
+	color: var(--on-danger-tint);
+}
+
+/* Submission fields: label above value, roomy for long messages */
+.fl-fields {
+	display: grid;
+	gap: 2px;
+	margin: 0;
+	border-radius: var(--radius-md);
+	overflow: hidden;
+}
+.fl-fields > div {
+	padding: 12px 16px;
+	background: var(--surface-2);
+}
+.fl-fields dt {
+	font-family: var(--font-mono);
+	font-size: 11px;
+	font-weight: 500;
+	letter-spacing: 0.04em;
+	color: var(--text-muted);
+}
+.fl-fields dd {
+	margin: 4px 0 0;
+	font-size: 15px;
+	line-height: 22px;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+/* Workspace overview grid: traffic full width, then submissions by form + heatmap side by side,
+   then latest activity. Filtered to one form the heatmap takes the whole row. */
+.fl-overview {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: 16px;
+}
+.fl-overview__traffic {
+	display: grid;
+}
+@media (min-width: 1100px) {
+	.fl-overview {
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+		grid-template-areas:
+			'traffic traffic'
+			'bars heat'
+			'activity activity';
+	}
+	.fl-overview[data-filtered='true'] {
+		grid-template-areas:
+			'traffic traffic'
+			'heat heat'
+			'activity activity';
+	}
+	.fl-overview__traffic {
+		grid-area: traffic;
+	}
+	.fl-overview__bars {
+		grid-area: bars;
+	}
+	.fl-overview__heat {
+		grid-area: heat;
+	}
+	.fl-overview__activity {
+		grid-area: activity;
+	}
+	/* Half width: square cells set the row height, and the bars card follows it.
+	   Full width (one form selected): short rows, so the squares don't get huge. */
+	.fl-overview__bars .fl-chart--fill {
+		min-height: 140px;
+	}
+	.fl-overview[data-filtered='true'] .fl-overview__heat .fl-heat {
+		grid-template-rows: repeat(7, 26px);
+	}
+	.fl-overview[data-filtered='true'] .fl-overview__heat .fl-heat .c {
+		aspect-ratio: auto;
+		height: 100%;
+	}
+}
+
+/* A page whose only content is an empty state: the empty state fills the window */
+.fl-fillpage {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: 24px;
+}
+@media (min-width: 900px) {
+	.fl-fillpage {
+		display: flex;
+		flex-direction: column;
+		gap: 24px;
+		min-height: calc(100dvh - 69px - 2 * var(--pad-y, 32px));
+	}
+	.fl-fillpage > .fl-empty {
+		flex: 1 1 auto;
+		justify-content: center;
+	}
+}
+
+/* Workspace shell: full-width frame with a full-height sidebar (desktop) or a drawer (phones) */
+.fl-shell {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	min-height: calc(100dvh - 69px);
+}
+.fl-shell__main {
+	min-width: 0;
+	padding: 24px 16px 64px;
+}
+.fl-side {
+	display: none;
+}
+@media (min-width: 900px) {
+	.fl-shell {
+		grid-template-columns: 272px minmax(0, 1fr);
+	}
+	.fl-side {
+		display: block;
+		position: sticky;
+		/* 68px top bar + its 1px border */
+		top: 69px;
+		height: calc(100dvh - 69px);
+		overflow-y: auto;
+		padding: 24px 16px;
+		border-right: 1px solid var(--line);
+		background: var(--surface);
+	}
+	.fl-shell__main {
+		--pad-y: 32px;
+		padding: var(--pad-y) 40px;
+	}
+}
+@media (min-width: 1600px) {
+	.fl-shell__main {
+		--pad-y: 36px;
+		padding: var(--pad-y) 56px;
+	}
+}
+
+/* Scroll card body: the card's padding on small screens */
+.fl-scrollcard {
+	padding: 0;
+}
+.fl-scrollcard__body {
+	padding: 24px;
+}
+@media (min-width: 640px) {
+	.fl-scrollcard__body {
+		padding: 40px;
+	}
+}
+
+/* Slim, rounded scrollbars for panes that scroll inside a card */
+.fl-scrollcard__body,
+.fl-inbox__list,
+.fl-inbox__detail {
+	scrollbar-width: thin;
+	scrollbar-color: var(--line-strong) transparent;
+}
+.fl-scrollcard__body::-webkit-scrollbar,
+.fl-inbox__list::-webkit-scrollbar,
+.fl-inbox__detail::-webkit-scrollbar {
+	width: 10px;
+}
+.fl-scrollcard__body::-webkit-scrollbar-thumb,
+.fl-inbox__list::-webkit-scrollbar-thumb,
+.fl-inbox__detail::-webkit-scrollbar-thumb {
+	border: 3px solid transparent;
+	border-radius: var(--radius-pill);
+	background: var(--line-strong) padding-box;
+}
+.fl-scrollcard__body::-webkit-scrollbar-track,
+.fl-inbox__list::-webkit-scrollbar-track,
+.fl-inbox__detail::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+/* Form page. On desktop every tab fills the window exactly: the page never scrolls.
+   Lists scroll in their own panes; longer tabs (integration, settings) scroll inside their card. */
+.fl-formpage {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: 16px;
+}
+.fl-formpage__tabs,
+.fl-formpage__stack {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: 16px;
+}
+@media (min-width: 1024px) {
+	.fl-formpage[data-fit='true'] {
+		display: flex;
+		flex-direction: column;
+		height: calc(100dvh - 69px - 2 * var(--pad-y, 32px));
+		min-height: 560px;
+	}
+	.fl-formpage[data-fit='true'] .fl-formpage__tabs,
+	.fl-formpage[data-fit='true'] .fl-formpage__panel,
+	.fl-formpage[data-fit='true'] .fl-formpage__stack {
+		display: flex;
+		flex: 1 1 auto;
+		flex-direction: column;
+		min-height: 0;
+	}
+	.fl-formpage[data-fit='true'] .fl-formpage__tabs > .fl-tabs {
+		align-self: flex-start;
+		flex: none;
+	}
+	/* Long tabs scroll inside their card: the card keeps its rounded corners and the
+	   scrollbar sits inset from its edge */
+	.fl-formpage[data-fit='true'] .fl-scrollcard {
+		display: flex;
+		flex: 1 1 auto;
+		min-height: 0;
+		padding: 8px;
+		overflow: hidden;
+	}
+	.fl-formpage[data-fit='true'] .fl-scrollcard__body {
+		flex: 1 1 auto;
+		min-height: 0;
+		padding: 32px;
+		overflow-y: auto;
+	}
+	.fl-formpage[data-fit='true'] .fl-formpage__panel > .fl-inbox,
+	.fl-formpage[data-fit='true'] .fl-formpage__panel > .fl-formpage__stack {
+		flex: 1 1 auto;
+	}
+	/* Empty list: the message fills the pane, centred */
+	.fl-formpage[data-fit='true'] .fl-inbox__empty {
+		display: flex;
+		flex: 1 1 auto;
+		min-height: 0;
+	}
+	.fl-formpage[data-fit='true'] .fl-inbox__empty > * {
+		flex: 1 1 auto;
+		align-content: center;
+	}
+	.fl-formpage[data-fit='true'] .fl-inbox {
+		display: flex;
+		flex: 1 1 auto;
+		flex-direction: column;
+		min-height: 0;
+	}
+	.fl-formpage[data-fit='true'] .fl-inbox__body {
+		flex: 1 1 auto;
+		min-height: 0;
+		grid-template-rows: minmax(0, 1fr);
+	}
+	.fl-formpage[data-fit='true'] .fl-inbox__list,
+	.fl-formpage[data-fit='true'] .fl-inbox__detail {
+		max-height: none;
+		min-height: 0;
+		overflow-y: auto;
+	}
+	/* keep the reading pane's scrollbar clear of the card's rounded edge */
+	.fl-formpage[data-fit='true'] .fl-inbox__detail {
+		margin: 8px 8px 8px 0;
+		padding: 20px 20px 20px 28px;
+	}
+}
+
+.fl-side__head {
+	display: grid;
+	gap: 8px;
+	margin-bottom: 16px;
+}
+.fl-side__title {
+	margin: 0;
+	padding: 0 12px;
+	font-family: var(--font-display);
+	font-size: 22px;
+	line-height: 28px;
+	font-weight: 700;
+	letter-spacing: -0.02em;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.fl-side__head .fl-back {
+	margin-left: 0;
+	justify-self: start;
+}
+.fl-side__nav {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+.fl-side__section {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin: 20px 0 6px;
+	padding: 0 4px 0 12px;
+}
+.fl-side__item {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-height: 40px;
+	padding: 0 12px;
+	border-radius: var(--radius-sm);
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--text-muted);
+	text-decoration: none;
+	transition:
+		background-color var(--fl-fast) var(--fl-ease),
+		color var(--fl-fast) var(--fl-ease);
+}
+.fl-side__item:hover {
+	background: var(--surface-hover);
+	color: var(--text);
+}
+.fl-side__item[aria-current='page'] {
+	background: var(--surface-2);
+	color: var(--text);
+}
+.fl-side__dot {
+	flex: none;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--amber);
+}
+.fl-side__dot[data-live='true'] {
+	background: var(--accent-text);
+}
+.fl-side__count {
+	font-family: var(--font-mono);
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--text-subtle);
+}
+.fl-side__empty {
+	margin: 4px 12px;
+	font-size: 13px;
+	color: var(--text-subtle);
+}
+
+/* Drawer: the sidebar on phones, sliding in from the left */
+.fl-drawer {
+	margin: 0;
+	width: min(320px, 86vw);
+	height: 100dvh;
+	max-height: none;
+	padding: 16px;
+	border: 0;
+	border-right: 1px solid var(--line);
+	background: var(--surface);
+	color: var(--text);
+	box-shadow: var(--shadow-md);
+}
+.fl-drawer[open] {
+	animation: fl-drawer-in 200ms var(--fl-ease);
+}
+.fl-drawer::backdrop {
+	background: rgb(4 38 26 / 0.45);
+	backdrop-filter: blur(2px);
+}
+@keyframes fl-drawer-in {
+	from {
+		transform: translateX(-100%);
+	}
+}
+
+/* Modal dialog (native <dialog>) */
+.fl-dialog {
+	/* Tailwind's reset zeroes margins; dialogs centre with margin: auto */
+	margin: auto;
+	width: min(880px, calc(100vw - 32px));
+	max-height: calc(100dvh - 48px);
+	padding: 0;
+	border: 1px solid var(--line);
+	border-radius: var(--radius-xl);
+	background: var(--surface);
+	color: var(--text);
+	box-shadow: var(--shadow-md);
+	overflow: hidden;
+}
+.fl-dialog[open] {
+	display: flex;
+	flex-direction: column;
+	animation: fl-dialog-in 180ms var(--fl-ease);
+}
+.fl-dialog::backdrop {
+	background: rgb(4 38 26 / 0.45);
+	backdrop-filter: blur(2px);
+}
+.fl-dialog__head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 16px;
+	padding: 24px 24px 16px;
+	border-bottom: 1px solid var(--line);
+}
+.fl-dialog__body {
+	padding: 24px;
+	overflow-y: auto;
+}
+@keyframes fl-dialog-in {
+	from {
+		opacity: 0;
+		transform: translateY(8px) scale(0.98);
+	}
+}
+
+/* Compact pill select, to sit next to the range filter */
+select.fl-input.fl-input--pill {
+	width: auto;
+	max-width: 240px;
+	height: 38px;
+	padding-left: 16px;
+	border-color: var(--line);
+	border-radius: var(--radius-pill);
+	font-size: 13px;
+	font-weight: 600;
+}
+
+/* Dropdown menu (account menu in the top bar) */
+.fl-menu {
+	position: absolute;
+	top: calc(100% + 8px);
+	right: 0;
+	z-index: 30;
+	min-width: 220px;
+	max-width: 280px;
+	padding: 6px;
+	border: 1px solid var(--line);
+	border-radius: var(--radius-md);
+	background: var(--surface);
+	box-shadow: var(--shadow-md);
+	animation: fl-menu-in 120ms var(--fl-ease);
+}
+.fl-menu__head {
+	padding: 8px 10px 10px;
+	margin-bottom: 4px;
+	border-bottom: 1px solid var(--line);
+}
+.fl-menu__item {
+	display: flex;
+	width: 100%;
+	align-items: center;
+	gap: 10px;
+	height: 38px;
+	padding: 0 10px;
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	font: inherit;
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--text);
+	text-align: left;
+	cursor: pointer;
+	transition: background-color var(--fl-fast) var(--fl-ease);
+}
+.fl-menu__item:hover:not(:disabled) {
+	background: var(--surface-hover);
+}
+.fl-menu__item:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+@keyframes fl-menu-in {
+	from {
+		opacity: 0;
+		transform: translateY(-4px);
+	}
+}
+
+/* Back link above page titles */
+.fl-back {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 32px;
+	padding: 0 12px 0 8px;
+	margin-left: -8px;
+	border-radius: var(--radius-pill);
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--text-muted);
+	text-decoration: none;
+	transition:
+		background-color var(--fl-fast) var(--fl-ease),
+		color var(--fl-fast) var(--fl-ease);
+}
+.fl-back:hover {
+	background: var(--surface-hover);
+	color: var(--text);
+}
+
+/* Empty states: a soft dashed card with a mint tile */
+.fl-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	text-align: center;
+	padding: 56px 24px;
+	border: 1.5px dashed var(--line-strong);
+	border-radius: var(--radius-lg);
+	background: var(--surface);
+}
+
+/* Expandable rows (submissions, blocked requests) */
+.fl-row {
+	border: 1px solid var(--line);
+	border-radius: var(--radius-md);
+	background: var(--surface);
+	overflow: hidden;
+	transition: border-color var(--fl-fast) var(--fl-ease);
+}
+.fl-row[data-open='true'] {
+	border-color: var(--line-strong);
+}
+.fl-row__head {
+	display: flex;
+	width: 100%;
+	align-items: center;
+	gap: 16px;
+	padding: 14px 16px;
+	border: 0;
+	background: transparent;
+	font: inherit;
+	color: inherit;
+	text-align: left;
+	cursor: pointer;
+	transition: background-color var(--fl-fast) var(--fl-ease);
+}
+.fl-row__head:hover {
+	background: var(--surface-hover);
+}
+.fl-row__chev {
+	flex: none;
+	color: var(--text-subtle);
+	transition: transform var(--fl-fast) var(--fl-ease);
+}
+.fl-row[data-open='true'] .fl-row__chev {
+	transform: rotate(90deg);
+}
+.fl-row__body {
+	padding: 16px;
+	border-top: 1px solid var(--line);
+	background: var(--surface-2);
+}
+
+/* Key/value lists */
+.fl-dl {
+	display: grid;
+	grid-template-columns: minmax(96px, max-content) 1fr;
+	gap: 8px 20px;
+	margin: 0;
+	font-size: 14px;
+	line-height: 20px;
+}
+.fl-dl dt {
+	font-family: var(--font-mono);
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--text-muted);
+	padding-top: 1px;
+}
+.fl-dl dd {
+	margin: 0;
+	min-width: 0;
+	overflow-wrap: anywhere;
+	white-space: pre-wrap;
+}
+
+/* Settings rows: title + description left, controls right on wide screens */
+.fl-setting {
+	display: grid;
+	gap: 16px;
+	padding: 28px 0;
+	border-bottom: 1px solid var(--line);
+}
+.fl-setting:first-child {
+	padding-top: 0;
+}
+.fl-setting:last-child {
+	border-bottom: 0;
+	padding-bottom: 0;
+}
+@media (min-width: 860px) {
+	.fl-setting {
+		grid-template-columns: 280px 1fr;
+		gap: 40px;
+	}
+}
+
+/* Decorative bars borrowed from the mark (auth screens, empty states) */
+.fl-bars {
+	display: grid;
+	gap: 10px;
+}
+.fl-bars i {
+	display: block;
+	height: 18px;
+	border-radius: var(--radius-pill);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		transition-duration: 0.01ms !important;
+		animation-duration: 0.01ms !important;
+	}
+}
 }

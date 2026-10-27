@@ -186,9 +186,32 @@ function assignFormsToWorkspace(
 	return { assigned: items.length };
 }
 
+interface WorkspaceFormRow {
+	id: string;
+	name: string;
+	is_active: number;
+	created_at: string;
+	submission_count: number;
+}
+
+// Forms in a workspace with their submission counts, for the workspace sidebar. Oldest first,
+// so the list keeps a stable order as forms are added.
+function listWorkspaceForms(userId: string, workspaceId: string): WorkspaceFormRow[] {
+	return db
+		.prepare(
+			`SELECT f.id, f.name, f.is_active, f.created_at,
+				(SELECT COUNT(*) FROM submissions WHERE form_id = f.id) AS submission_count
+			FROM forms f
+			WHERE f.user_id = ? AND f.workspace_id = ?
+			ORDER BY f.created_at ASC, f.name ASC`
+		)
+		.all(userId, workspaceId) as WorkspaceFormRow[];
+}
+
 export {
 	listWorkspacesForUser,
 	getWorkspace,
+	listWorkspaceForms,
 	createWorkspace,
 	countOrphanForms,
 	listOrphanForms,
@@ -196,5 +219,6 @@ export {
 	slugify,
 	type Workspace,
 	type WorkspaceWithCount,
-	type OrphanForm
+	type OrphanForm,
+	type WorkspaceFormRow
 };

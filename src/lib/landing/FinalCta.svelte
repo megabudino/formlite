@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { Icon } from '$lib/ui';
+
 	type CtaProps = {
 		label: string;
 		href: string;
@@ -14,85 +16,80 @@
 		note?: string;
 	};
 
-	let {
-		eyebrow,
-		title,
-		body,
-		primaryCta,
-		secondaryCta,
-		note
-	}: Props = $props();
+	let { eyebrow, title, body, primaryCta, secondaryCta, note }: Props = $props();
 </script>
 
-<section class="relative overflow-hidden bg-ink-900">
+<section class="px-4 pb-20 sm:px-6 sm:pb-28">
 	<div
-		class="pointer-events-none absolute inset-0 -z-0 bg-[radial-gradient(circle_at_15%_85%,var(--color-mint-700),transparent_45%),radial-gradient(circle_at_85%_15%,var(--color-mint-600),transparent_45%)] opacity-50"
-	></div>
-
-	<div class="relative mx-auto max-w-5xl px-6 py-28 sm:py-36 text-center">
-		{#if eyebrow}
-			<div class="flex items-center justify-center gap-4">
-				<span class="h-px w-10 bg-mint-400"></span>
-				<span
-					class="font-mono text-xs uppercase tracking-[0.25em] text-mint-300"
-				>
-					{eyebrow}
-				</span>
-				<span class="h-px w-10 bg-mint-400"></span>
+		class="relative mx-auto max-w-[1200px] overflow-hidden rounded-xl border border-line bg-inverse px-6 py-16 text-on-inverse sm:px-12 sm:py-24"
+	>
+		<!-- Decoration: the mark's bars and dot, mint on the dark slab, plus an amber block -->
+		<div class="pointer-events-none absolute inset-y-0 right-0 hidden w-[36%] lg:block" aria-hidden="true">
+			<div class="absolute top-16 right-14 left-8">
+				<div class="grid gap-4">
+					<i class="block h-8 w-full rounded-full bg-accent"></i>
+					<i class="block h-8 w-[70%] rounded-full bg-accent"></i>
+					<div class="flex items-center gap-4">
+						<i class="block h-8 w-[36%] rounded-full bg-accent"></i>
+						<i class="block h-8 w-8 rounded-full bg-accent"></i>
+					</div>
+				</div>
 			</div>
-		{/if}
-
-		<h2
-			class="mt-8 text-balance text-5xl font-extrabold leading-[1.0] tracking-tight text-white sm:text-6xl lg:text-7xl"
-		>
-			{title}
-		</h2>
-
-		{#if body}
-			<p class="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-ink-300 sm:text-xl">
-				{body}
-			</p>
-		{/if}
-
-		<div class="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
-			<a
-				href={primaryCta.href}
-				target={primaryCta.external ? '_blank' : undefined}
-				rel={primaryCta.external ? 'noopener' : undefined}
-				class="group inline-flex items-center justify-center gap-2 rounded-lg bg-mint-500 px-8 py-4 text-lg font-semibold text-white shadow-lg shadow-mint-500/20 transition hover:-translate-y-0.5 hover:bg-mint-400 hover:shadow-xl hover:shadow-mint-500/30"
-			>
-				{primaryCta.label}
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="2.5"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					class="h-5 w-5 transition group-hover:translate-x-0.5"
-					aria-hidden="true"
-				>
-					<path d="M5 12h14" />
-					<path d="m13 5 7 7-7 7" />
-				</svg>
-			</a>
-			{#if secondaryCta}
-				<a
-					href={secondaryCta.href}
-					target={secondaryCta.external ? '_blank' : undefined}
-					rel={secondaryCta.external ? 'noopener' : undefined}
-					class="inline-flex items-center justify-center rounded-lg border-2 border-white/30 bg-transparent px-8 py-4 text-lg font-semibold text-white transition hover:border-white hover:bg-white/5"
-				>
-					{secondaryCta.label}
-				</a>
-			{/if}
+			<div class="absolute right-14 -bottom-8 h-32 w-32 rounded-lg bg-amber"></div>
+			<div class="absolute right-52 -bottom-10 h-20 w-40 rounded-lg bg-accent opacity-20"></div>
 		</div>
 
-		{#if note}
-			<p class="mt-6 font-mono text-xs uppercase tracking-wider text-ink-400">
-				{note}
-			</p>
-		{/if}
+		<div class="relative max-w-2xl lg:max-w-[58%]">
+			{#if eyebrow}
+				<p class="fl-overline inline-flex items-center gap-2 !text-on-inverse">
+					<span class="h-2 w-2 rounded-full bg-accent" aria-hidden="true"></span>
+					{eyebrow}
+				</p>
+			{/if}
+
+			<h2
+				class="{eyebrow ? 'mt-5' : ''} font-display text-[clamp(2.5rem,7vw,4.5rem)] leading-[0.98] font-extrabold tracking-[-0.04em] text-white"
+			>
+				{title}
+			</h2>
+
+			{#if body}
+				<p class="mt-6 max-w-xl text-lg leading-relaxed opacity-85">{body}</p>
+			{/if}
+
+			<!-- Call to action and its note share one column: the note sits centred under the button -->
+			<div class="mt-9 flex flex-col sm:inline-flex">
+			<div class="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+				<a
+					href={primaryCta.href}
+					target={primaryCta.external ? '_blank' : undefined}
+					rel={primaryCta.external ? 'noopener' : undefined}
+					class="fl-btn fl-btn--primary fl-btn--lg sm:flex-1"
+				>
+					<Icon name="github" />
+					{primaryCta.label}
+					<Icon name="arrow-right" />
+				</a>
+				{#if secondaryCta}
+					<a
+						href={secondaryCta.href}
+						target={secondaryCta.external ? '_blank' : undefined}
+						rel={secondaryCta.external ? 'noopener' : undefined}
+						class="fl-btn fl-btn--lg !border-on-inverse/30 text-on-inverse hover:bg-white/5"
+					>
+						{secondaryCta.label}
+					</a>
+				{/if}
+			</div>
+
+			{#if note}
+				<p
+					class="m-0 mt-5 text-center font-mono text-[11px] font-medium tracking-[0.12em] uppercase opacity-70 sm:whitespace-nowrap"
+				>
+					{note}
+				</p>
+			{/if}
+			</div>
+		</div>
 	</div>
 </section>

@@ -1,28 +1,24 @@
+<script lang="ts">
+	import { Icon } from '$lib/ui';
+</script>
+
 <svelte:head>
 	<title>Thank you — Formlite</title>
 </svelte:head>
 
-<div
-	class="flex min-h-screen items-center justify-center bg-gradient-to-b from-white via-mint-50/30 to-white p-4"
->
-	<div class="w-full max-w-md rounded-2xl border border-ink-100 bg-white p-12 text-center shadow-card">
+<!-- Shown to people who submit a form without a redirect URL, so it stays neutral and brief. -->
+<div class="flex min-h-screen flex-col items-center justify-center bg-bg px-4 py-12">
+	<div class="fl-card w-full max-w-[440px] !rounded-xl !p-10 text-center sm:!p-12">
 		<div
-			class="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-mint-100 text-mint-600"
+			class="mx-auto grid h-16 w-16 place-items-center rounded-full bg-accent text-on-accent shadow-glow"
 		>
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2.5"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				class="h-8 w-8"
-			>
-				<polyline points="20 6 9 17 4 12" />
-			</svg>
+			<Icon name="check" size={28} />
 		</div>
-		<h1 class="text-2xl font-bold tracking-tight text-ink-900">Thank you!</h1>
-		<p class="mt-2 text-sm text-ink-500">Your submission has been received.</p>
+		<h1 class="fl-h1 mt-6">Thank you!</h1>
+		<p class="fl-muted mt-2">Your message is on its way. You can close this page.</p>
+		<button type="button" class="fl-btn fl-btn--secondary mt-8" onclick={() => history.back()}>
+			<Icon name="chevron-left" size={16} />
+			Go back
+		</button>
 	</div>
 </div>

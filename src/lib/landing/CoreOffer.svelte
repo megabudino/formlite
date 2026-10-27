@@ -1,88 +1,56 @@
 <script lang="ts">
+	import { Icon, type IconName } from '$lib/ui';
+	import SectionHead from './SectionHead.svelte';
+
 	type CtaProps = {
 		label: string;
 		href: string;
 		external?: boolean;
 	};
 
+	type Feature = string | { label: string; icon: IconName };
+
 	type Props = {
 		eyebrow?: string;
 		title: string;
 		body: string;
-		features?: string[];
+		features?: Feature[];
 		primaryCta: CtaProps;
 		secondaryCta?: CtaProps;
 		note?: string;
 	};
 
-	let {
-		eyebrow,
-		title,
-		body,
-		features = [],
-		primaryCta,
-		secondaryCta,
-		note
-	}: Props = $props();
+	let { eyebrow, title, body, features = [], primaryCta, secondaryCta, note }: Props = $props();
+
+	const items = $derived(
+		features.map((f) => (typeof f === 'string' ? { label: f, icon: 'check' as IconName } : f))
+	);
 </script>
 
-<section class="relative overflow-hidden bg-ink-50">
-	<div
-		class="pointer-events-none absolute inset-0 -z-0 bg-[radial-gradient(ellipse_60%_50%_at_80%_20%,var(--color-mint-200),transparent_60%)] opacity-70"
-	></div>
+<section class="mt-20 border-y border-line bg-surface sm:mt-28">
+	<div class="mx-auto max-w-[1200px] px-4 py-20 sm:px-6 sm:py-28">
+		<div class="grid items-start gap-12 lg:grid-cols-[1.1fr_1fr] lg:items-center lg:gap-16">
+			<div class="min-w-0">
+				<SectionHead {eyebrow} {title} />
+				<p class="mt-6 max-w-xl text-lg leading-relaxed text-fg-muted">{body}</p>
 
-	<div class="relative mx-auto max-w-6xl px-6 py-24 sm:py-32">
-		<div class="grid items-start gap-12 lg:grid-cols-[3fr_2fr] lg:gap-20">
-			<div>
-				{#if eyebrow}
-					<div class="flex items-center gap-4">
-						<span class="h-px w-10 bg-mint-500"></span>
-						<span
-							class="font-mono text-xs uppercase tracking-[0.25em] text-mint-700"
-						>
-							{eyebrow}
-						</span>
-					</div>
-				{/if}
-
-				<h2
-					class="mt-8 text-balance text-4xl font-extrabold leading-[1.05] tracking-tight text-ink-900 sm:text-5xl lg:text-6xl"
-				>
-					{title}
-				</h2>
-				<p class="mt-6 max-w-xl text-lg leading-relaxed text-ink-700 sm:text-xl">
-					{body}
-				</p>
-
-				<div class="mt-10 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+				<div class="mt-9 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
 					<a
 						href={primaryCta.href}
 						target={primaryCta.external ? '_blank' : undefined}
 						rel={primaryCta.external ? 'noopener' : undefined}
-						class="group inline-flex items-center justify-center gap-2 rounded-lg bg-ink-900 px-7 py-4 text-base font-semibold text-white shadow-lg shadow-ink-900/10 transition hover:-translate-y-0.5 hover:bg-ink-800 hover:shadow-xl hover:shadow-ink-900/20 sm:text-lg"
+						class="fl-btn fl-btn--primary fl-btn--lg"
 					>
+						<Icon name="github" />
 						{primaryCta.label}
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2.5"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							class="h-4 w-4 transition group-hover:translate-x-0.5"
-							aria-hidden="true"
-						>
-							<path d="M5 12h14" />
-							<path d="m13 5 7 7-7 7" />
-						</svg>
+						<Icon name="arrow-right" />
 					</a>
 					{#if secondaryCta}
 						<a
 							href={secondaryCta.href}
 							target={secondaryCta.external ? '_blank' : undefined}
 							rel={secondaryCta.external ? 'noopener' : undefined}
-							class="inline-flex items-center justify-center rounded-lg border-2 border-ink-900 bg-transparent px-7 py-4 text-base font-semibold text-ink-900 transition hover:bg-ink-900 hover:text-white sm:text-lg"
+							class="fl-btn fl-btn--secondary fl-btn--lg"
 						>
 							{secondaryCta.label}
 						</a>
@@ -90,39 +58,24 @@
 				</div>
 
 				{#if note}
-					<p class="mt-5 font-mono text-xs uppercase tracking-wider text-ink-500">
+					<p
+						class="mt-6 inline-flex max-w-xl items-start gap-3 rounded-md bg-amber-tint px-4 py-3 text-sm leading-5 font-medium text-on-amber-tint"
+					>
+						<span class="mt-1.5 h-2 w-2 flex-none rounded-full bg-amber" aria-hidden="true"></span>
 						{note}
 					</p>
 				{/if}
 			</div>
 
-			{#if features.length > 0}
-				<div>
-					<p
-						class="font-mono text-xs uppercase tracking-[0.25em] text-mint-700"
-					>
-						What you get
-					</p>
-					<ul class="mt-6 divide-y divide-ink-200">
-						{#each features as feature}
-							<li class="flex items-start gap-3 py-4 text-base font-medium text-ink-800">
-								<span
-									class="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-mint-500 text-white"
-								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="3"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										class="h-3.5 w-3.5"
-									>
-										<polyline points="20 6 9 17 4 12" />
-									</svg>
-								</span>
-								<span>{feature}</span>
+			{#if items.length > 0}
+				<div class="min-w-0">
+					<ul class="m-0 grid list-none gap-3 p-0 sm:grid-cols-2 lg:grid-cols-1">
+						{#each items as item}
+							<li
+								class="flex items-center gap-4 rounded-lg border border-line bg-bg p-4 text-[15px] leading-5 font-semibold"
+							>
+								<span class="fl-card__tile !h-10 !w-10 flex-none"><Icon name={item.icon} /></span>
+								<span>{item.label}</span>
 							</li>
 						{/each}
 					</ul>

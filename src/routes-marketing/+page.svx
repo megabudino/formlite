@@ -2,6 +2,7 @@
 	import {
 		LandingHeader,
 		Hero,
+		ProductShowcase,
 		PainPoints,
 		Bridge,
 		CoreOffer,
@@ -17,7 +18,7 @@
 		'Formlite is the open source, self hosted alternative to Formspree. Point your HTML form at an endpoint, receive submissions by email and webhook, own your data.';
 	const ogImageUrl = `${siteUrl}/og-image.svg`;
 	const repoUrl = 'https://github.com/megabudino/formlite';
-	const zeromegaUrl = 'https://www.zeromega.it/';
+	const zeromegaUrl = 'https://www.zeromega.it/en';
 	const currentYear = new Date().getFullYear();
 	const authorName = 'Davide Ruggeri';
 
@@ -99,7 +100,7 @@
 	{@html jsonLdMarkup}
 </svelte:head>
 
-<div class="min-h-screen bg-white">
+<div class="min-h-screen overflow-x-clip bg-bg text-fg">
 
 <LandingHeader
 	brand="Formlite"
@@ -109,30 +110,62 @@
 <main>
 
 <Hero
-	eyebrow="Open source · Self hosted · Yours"
 	headline="Forms that just"
 	highlight="work."
 	subhead="Point your HTML form at an endpoint. Submissions land in your inbox and your webhooks. No backend. No JavaScript. No one else owning your data."
 	primaryCta={{ label: 'Get the source on GitHub', href: repoUrl, external: true }}
-	note="MIT licensed · Clone it · Run it · Own every submission"
+	note="Self hosted only. There is no SaaS to sign up to."
+	footnote="MIT · Single Docker image · SQLite"
+/>
+
+<ProductShowcase
+	title="Every submission in one calm, fast inbox."
+	subhead="See what's coming in, read each message in full and clear out the spam. Traffic, busiest forms and peak hours sit one click away."
+	hero={{
+		src: '/screenshots/formlite-overview-light.webp',
+		alt: 'Formlite workspace overview: submissions and blocked spam over the last 7 days, submissions per form and a heatmap of when people write',
+		width: 2880,
+		height: 1812,
+		label: 'forms.your-domain.com',
+		mobile: { src: '/screenshots/formlite-overview-mobile.webp', width: 1170, height: 2080 }
+	}}
+	rows={[
+		{
+			src: '/screenshots/formlite-inbox-light.webp',
+			alt: 'Formlite form inbox with a list of submissions and the selected message open on the right',
+			width: 2880,
+			height: 1800,
+			mobile: { src: '/screenshots/formlite-inbox-mobile.webp', width: 1170, height: 2080 },
+			title: 'Read, reply, clean up',
+			body: 'Each form gets its own inbox. Open a message, reply by email in one click, select and delete in bulk.'
+		},
+		{
+			src: '/screenshots/formlite-dashboard-light.webp',
+			alt: 'Formlite dashboard with three workspaces and a 30-day sparkline of submissions for each',
+			width: 2240,
+			height: 1000,
+			mobile: { src: '/screenshots/formlite-dashboard-mobile.webp', width: 1170, height: 2080 },
+			title: 'One place for every site',
+			body: 'Group forms into workspaces per client or project, and see at a glance which ones are busy.'
+		}
+	]}
 />
 
 <PainPoints
-	eyebrow="Why people end up here"
 	title="The form SaaS bill keeps growing. And the data isn't even yours."
 	items={[
 		{
-			icon: '💸',
+			icon: 'dollar',
 			title: 'Tired of monthly fees',
 			body: "Form SaaS charges per submission, per form, per seat. For a static site that ships one form, the math stops making sense fast."
 		},
 		{
-			icon: '🔐',
+			icon: 'shield',
 			title: 'Tired of giving away your leads',
 			body: "Your contact requests, job applications, and sales leads live in someone else's database. You want them in yours."
 		},
 		{
-			icon: '🧱',
+			icon: 'code',
 			title: 'Tired of "just spin up a backend"',
 			body: "You don't want to write a controller, configure SMTP, store submissions, sign webhooks. You want it to already exist."
 		}
@@ -144,29 +177,26 @@
 />
 
 <CoreOffer
-	eyebrow="The core offer"
 	title="A form endpoint you drop into your HTML. On your server. For free."
 	body="Formlite is a small, fast, multi tenant form backend you self host in a single Docker container. Create a form, point your form action at it, and submissions land in your inbox and your webhooks. Signed. Spam filtered. Stored in your own SQLite database."
 	features={[
-		'Email notifications via Mailgun',
-		'HMAC signed webhooks',
-		'Honeypot spam protection',
-		'Domain allowlist',
-		'Multi workspace. Multi form.',
-		'One container. One volume. Done.'
+		{ icon: 'mail', label: 'Email notifications via Mailgun' },
+		{ icon: 'webhook', label: 'HMAC signed webhooks' },
+		{ icon: 'shield', label: 'Honeypot spam protection' },
+		{ icon: 'globe', label: 'Domain allowlist' },
+		{ icon: 'folder', label: 'Multi workspace. Multi form.' },
+		{ icon: 'inbox', label: 'One container. One volume. Done.' }
 	]}
 	primaryCta={{ label: 'Get the source on GitHub', href: repoUrl, external: true }}
-	note="Self hosted only. There is no SaaS to sign up to. That's the entire point."
 />
 
 <Team
-	eyebrow="Who's behind it"
-	title="Made by a small lab that builds for the web."
+	title="Made by a small studio that builds websites."
 	members={[
 		{
 			name: 'Davide Ruggeri',
 			role: 'Author & maintainer',
-			bio: "Founder of Zeromega, a web technology lab focused on CRO, SEO and GEO. Builds tools, ships sites.",
+			bio: "Founder of Zeromega, a studio specialised in websites. We build them, look after them and grow their traffic and conversions.",
 			avatarUrl: 'https://www.zeromega.it/images/davide-di-zeromega.webp',
 			link: { label: 'zeromega.it', href: zeromegaUrl }
 		}
@@ -174,11 +204,10 @@
 />
 
 <FinalCta
-	eyebrow="Ready when you are"
 	title="Stop renting your form backend."
 	body="Clone the repo. Run one container. Point your form at it. That's the whole onboarding."
 	primaryCta={{ label: 'Get the source on GitHub', href: repoUrl, external: true }}
-	note="MIT licensed · Single Docker image · SQLite included"
+	note="MIT · Single Docker image · SQLite"
 />
 
 </main>
@@ -191,13 +220,10 @@
 		linkHref: zeromegaUrl
 	}}
 	links={[
-		{ label: 'GitHub', href: repoUrl, external: true },
-		{ label: 'Zeromega', href: zeromegaUrl, external: true }
+		{ label: 'GitHub', href: repoUrl, external: true, icon: 'github' },
+		{ label: 'Zeromega', href: zeromegaUrl, external: true, icon: 'globe' }
 	]}
+	legal={`© ${currentYear} Davide Ruggeri · Zeromega. The studio specialised in websites.`}
 />
-
-<p class="mx-auto max-w-6xl px-6 pb-10 text-center font-mono text-xs uppercase tracking-wider text-ink-400">
-	© {currentYear} Davide Ruggeri · Zeromega. A web technology lab specialising in CRO, SEO and GEO.
-</p>
 
 </div>
