@@ -50,6 +50,8 @@ A self-hosted Formspree alternative - multi-tenant form backend with email notif
 
 Submissions are rate limited per client IP. Behind a reverse proxy (Traefik, Nginx, Dokploy, …) the app only sees the proxy's address unless you set `ADDRESS_HEADER=X-Forwarded-For`; without it, all visitors share the same per-IP limit. Counters are kept in memory, so they are per instance and reset on restart.
 
+Behind Cloudflare, set `ADDRESS_HEADER=CF-Connecting-IP`, and only accept traffic from [Cloudflare's IPs](https://www.cloudflare.com/ips/) on the server (otherwise anyone can send that header). When `ADDRESS_HEADER` is set, the IP shown with each submission and in the Spam tab comes from the same header as the rate limit.
+
 ### Multi-domain login
 
 If you serve Formlite from more than one hostname (e.g. while migrating from an old domain), set `TRUSTED_ORIGINS` to the full comma-separated list of accepted origins:
