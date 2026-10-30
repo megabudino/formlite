@@ -19,6 +19,16 @@ services:
       # - MAILGUN_API_KEY=your-api-key
       # - MAILGUN_DOMAIN=your-domain.mailgun.org
       # - MAILGUN_FROM_EMAIL=noreply@your-domain.com
+      # Single sign-on with an OpenID Connect provider (optional, invite only).
+      # Redirect URI to register: <ORIGIN>/api/auth/oauth2/callback/oidc
+      # Post-logout redirect URI to register: <ORIGIN>/auth/login
+      # - OIDC_ISSUER=https://id.example.com
+      # - OIDC_CLIENT_ID=formlite
+      # - OIDC_CLIENT_SECRET=your-client-secret
+      # - OIDC_PROVIDER_NAME=Example ID
+      # - OIDC_ACCOUNT_URL=https://id.example.com/account
+      # Allow only SSO (remove and restart to get back in if the provider is down).
+      # - PASSWORD_LOGIN=false
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/health"]
       interval: 30s

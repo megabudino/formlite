@@ -1,7 +1,5 @@
 <script lang="ts">
 	import type { LayoutData } from './$types';
-	import { authClient } from '$lib/auth-client';
-	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { Brand, Icon, ThemeToggle } from '$lib/ui';
 	import { workspaceMenu } from '$lib/ui/workspace-menu.svelte';
@@ -9,6 +7,7 @@
 	let { data, children }: { data: LayoutData; children: import('svelte').Snippet } = $props();
 	let loggingOut = $state(false);
 	let userMenuOpen = $state(false);
+	let avatarFailed = $state(false);
 	let userMenu = $state<HTMLElement | null>(null);
 
 	// Close the user menu on a click outside it or on Escape.
@@ -36,8 +35,11 @@
 	async function handleLogout() {
 		loggingOut = true;
 		try {
-			await authClient.signOut();
-			goto('/auth/login');
+			const res = await fetch('/auth/logout', { method: 'POST' });
+			if (!res.ok) throw new Error(`Logout failed (${res.status})`);
+			const { redirectTo } = (await res.json()) as { redirectTo: string };
+			// Full navigation: SSO logout continues on the identity provider.
+			window.location.href = redirectTo;
 		} catch (err) {
 			console.error('Logout failed:', err);
 			loggingOut = false;
@@ -81,10 +83,22 @@
 							aria-label="Account menu for {data.user.name}"
 							onclick={() => (userMenuOpen = !userMenuOpen)}
 						>
-							<span
-								class="grid h-8 w-8 place-items-center rounded-full bg-accent-tint font-mono text-xs font-medium text-on-accent-tint"
-								aria-hidden="true">{initials}</span
-							>
+							{#if data.user.image && !avatarFailed}
+								<img
+									src={data.user.image}
+									alt=""
+									width="32"
+									height="32"
+									referrerpolicy="no-referrer"
+									class="h-8 w-8 rounded-full object-cover"
+									onerror={() => (avatarFailed = true)}
+								/>
+							{:else}
+								<span
+									class="grid h-8 w-8 place-items-center rounded-full bg-accent-tint font-mono text-xs font-medium text-on-accent-tint"
+									aria-hidden="true">{initials}</span
+								>
+							{/if}
 							<span class="hidden max-w-40 truncate text-sm font-semibold sm:inline">{data.user.name}</span>
 							<Icon
 								name="chevron-right"
@@ -98,6 +112,20 @@
 									<p class="m-0 truncate text-sm font-semibold">{data.user.name}</p>
 									<p class="m-0 truncate text-xs text-fg-muted">{data.user.email}</p>
 								</div>
+								{#if data.ssoAccount}
+									<a
+										href={data.ssoAccount.url}
+										target="_blank"
+										rel="noopener"
+										role="menuitem"
+										class="fl-menu__item"
+										onclick={() => (userMenuOpen = false)}
+									>
+										<Icon name="key" size={16} />
+										<span class="min-w-0 flex-1 truncate">Manage {data.ssoAccount.label} account</span>
+										<Icon name="arrow-up-right" size={14} class="text-fg-subtle" />
+									</a>
+								{/if}
 								<button type="button" role="menuitem" class="fl-menu__item" onclick={handleLogout} disabled={loggingOut}>
 									<Icon name="log-out" size={16} />
 									{loggingOut ? 'Logging out…' : 'Log out'}

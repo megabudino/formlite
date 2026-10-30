@@ -5,6 +5,7 @@ A self-hosted Formspree alternative - multi-tenant form backend with email notif
 ## Features
 
 - 🔒 User authentication (initial setup, login, logout)
+- 🔑 Optional single sign-on with any OpenID Connect provider
 - 📝 Create and manage multiple forms
 - 📧 Email notifications via Mailgun
 - 🔗 Webhook integrations with HMAC signatures
@@ -37,6 +38,13 @@ A self-hosted Formspree alternative - multi-tenant form backend with email notif
 | `SUBMISSION_RATE_LIMIT_PER_FORM` | Max submissions per minute to a form overall. `0` disables. | `120` |
 | `ADDRESS_HEADER` | Header holding the client IP when running behind a reverse proxy (e.g. `X-Forwarded-For`). See below. | _(none)_ |
 | `XFF_DEPTH` | Number of trusted proxies in front of the app, when `ADDRESS_HEADER=X-Forwarded-For`. | `1` |
+| `OIDC_ISSUER` | OpenID Connect issuer URL. Enables single sign-on together with `OIDC_CLIENT_ID`. See below. | _(none)_ |
+| `OIDC_CLIENT_ID` | Client ID registered with your identity provider. | _(none)_ |
+| `OIDC_CLIENT_SECRET` | Client secret. Leave empty for public clients (PKCE only). | _(none)_ |
+| `OIDC_PROVIDER_NAME` | Name on the login button ("Continue with …"). | `SSO` |
+| `OIDC_TOKEN_AUTH_METHOD` | How the client secret is sent: `client_secret_basic` or `client_secret_post`. Must match the client registration. | `client_secret_basic` |
+| `OIDC_ACCOUNT_URL` | Account page at your provider. Users with a linked SSO account get a "Manage … account" link in the user menu. | _(none)_ |
+| `PASSWORD_LOGIN` | Set to `false` to allow only single sign-on. Ignored when SSO is not configured. | `true` |
 
 ### Rate limiting behind a reverse proxy
 
@@ -51,6 +59,23 @@ TRUSTED_ORIGINS=https://old-domain.com,https://new-domain.com
 ```
 
 Each domain has its own session cookie, so users log in independently on each. Wildcards are supported (`https://*.example.com`) for subdomain setups.
+
+### Single sign-on (OpenID Connect)
+
+Formlite can log users in through any OpenID Connect provider (Authentik, Keycloak, Pocket ID, Zitadel, …). Password login keeps working alongside it.
+
+1. Register Formlite as a client in your provider with this redirect URI:
+   `<ORIGIN>/api/auth/oauth2/callback/oidc` (for example `https://forms.example.com/api/auth/oauth2/callback/oidc`).
+   Formlite uses the authorization code flow with PKCE and asks for the `openid email profile` scopes.
+   Also register the post-logout redirect URI `<ORIGIN>/auth/login`.
+2. Set `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` (if your client has one) and optionally `OIDC_PROVIDER_NAME` and `OIDC_ACCOUNT_URL`.
+3. Restart. The login page shows a "Continue with …" button.
+
+SSO is invite only: it never creates accounts. A user can log in with SSO only if a Formlite account with the same email already exists, and the provider must report that email as verified (`email_verified`). The first SSO login links the provider identity to that account.
+
+To allow only single sign-on, set `PASSWORD_LOGIN=false`: the password form disappears and the password login endpoint is turned off. Log in once with SSO before turning it on, to check that your account links. If the provider is down, remove the variable and restart to log in with your password again.
+
+Logging out of a session opened with SSO also ends the session at the provider (RP-initiated logout with `id_token_hint`), then returns to the Formlite login page. Sessions opened with a password log out of Formlite only.
 
 ## Development
 
