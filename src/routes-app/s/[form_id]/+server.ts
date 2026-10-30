@@ -40,7 +40,14 @@ function getRequestOrigin(request: Request): string | null {
 	}
 }
 
-function getRequestIp(request: Request): string | null {
+// IP shown with a submission (and in the Spam tab). When ADDRESS_HEADER is set
+// (e.g. CF-Connecting-IP behind Cloudflare), use the address the adapter resolved
+// from it, the same one the rate limit uses. Otherwise keep reading the proxy
+// headers, which hold the visitor's IP behind a plain reverse proxy.
+function getRequestIp(request: Request, clientAddress: string | null): string | null {
+	if (process.env.ADDRESS_HEADER?.trim() && clientAddress) {
+		return clientAddress;
+	}
 	return request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || null;
 }
 
@@ -74,9 +81,10 @@ function logBlockedRequest(
 	request: Request,
 	origin: string | null,
 	data: Record<string, unknown>,
-	reason: 'origin_not_allowed' | 'honeypot'
+	reason: 'origin_not_allowed' | 'honeypot',
+	clientAddress: string | null
 ): void {
-	const ip = getRequestIp(request);
+	const ip = getRequestIp(request, clientAddress);
 	const userAgent = request.headers.get('user-agent') || null;
 
 	const insertStmt = db.prepare(
@@ -242,7 +250,7 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 	const { _gotcha, ...cleanData } = data;
 
 	if (!originAllowed) {
-		logBlockedRequest(form_id, request, requestOrigin, cleanData, 'origin_not_allowed');
+		logBlockedRequest(form_id, request, requestOrigin, cleanData, 'origin_not_allowed', clientAddress);
 		return json(
 			{ ok: false, error: 'Origin not allowed' },
 			{ status: 403, headers: corsHeaders }
@@ -263,13 +271,13 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 	// Honeypot spam filter: if _gotcha has any value, it's likely a bot.
 	// Log it to the Spam tab (browser autofill can trip it too) but don't deliver it
 	if (_gotcha !== undefined && _gotcha !== null && _gotcha !== '') {
-		logBlockedRequest(form_id, request, requestOrigin, cleanData, 'honeypot');
+		logBlockedRequest(form_id, request, requestOrigin, cleanData, 'honeypot', clientAddress);
 		return respondSuccess();
 	}
 
 	// Build meta object with request headers
 	const meta = {
-		ip: getRequestIp(request),
+		ip: getRequestIp(request, clientAddress),
 		userAgent: request.headers.get('user-agent') || null,
 		referer: request.headers.get('referer') || null
 	};
