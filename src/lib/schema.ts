@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS session (
     expiresAt TEXT NOT NULL,
     ipAddress TEXT,
     userAgent TEXT,
+    oidcIdToken TEXT,
     createdAt TEXT NOT NULL DEFAULT (datetime('now')),
     updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (userId) REFERENCES user(id) ON DELETE CASCADE

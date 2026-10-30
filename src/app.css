@@ -719,8 +719,8 @@ select.fl-input.fl-input--pill {
 	top: calc(100% + 8px);
 	right: 0;
 	z-index: 30;
-	min-width: 220px;
-	max-width: 280px;
+	min-width: 260px;
+	max-width: min(320px, calc(100vw - 32px));
 	padding: 6px;
 	border: 1px solid var(--line);
 	border-radius: var(--radius-md);
@@ -748,6 +748,8 @@ select.fl-input.fl-input--pill {
 	font-weight: 600;
 	color: var(--text);
 	text-align: left;
+	text-decoration: none;
+	white-space: nowrap;
 	cursor: pointer;
 	transition: background-color var(--fl-fast) var(--fl-ease);
 }

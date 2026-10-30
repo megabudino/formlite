@@ -185,6 +185,7 @@
 		{ icon: 'shield', label: 'Honeypot spam protection' },
 		{ icon: 'globe', label: 'Domain allowlist' },
 		{ icon: 'folder', label: 'Multi workspace. Multi form.' },
+		{ icon: 'key', label: 'Single sign-on with any OpenID Connect provider' },
 		{ icon: 'inbox', label: 'One container. One volume. Done.' }
 	]}
 	primaryCta={{ label: 'Get the source on GitHub', href: repoUrl, external: true }}
