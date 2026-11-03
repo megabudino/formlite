@@ -8,7 +8,7 @@
 
 	function select(range: RangeKey) {
 		const url = new URL($page.url);
-		if (range === '7d') url.searchParams.delete('range');
+		if (range === '30d') url.searchParams.delete('range');
 		else url.searchParams.set('range', range);
 		goto(url, { noScroll: true, keepFocus: true, replaceState: true });
 	}

@@ -79,8 +79,16 @@
 	});
 
 	// null until the first run, so only a change seen while the page is open counts as "arrived".
+	// Tracked per form: the page is reused when moving between forms, and going from an
+	// emptied form to one with submissions is not an arrival.
 	let wasEmpty: boolean | null = null;
+	let seenFormId: string | null = null;
 	$effect(() => {
+		const formId = data.form.id;
+		if (formId !== seenFormId) {
+			seenFormId = formId;
+			wasEmpty = null;
+		}
 		if (wasEmpty === true && hasSubmissions) {
 			firstArrived = true;
 			selectTab('submissions');
@@ -106,7 +114,8 @@
 	function selectTab(id: TabId) {
 		activeTab = id;
 		// Keep the tab in the URL without a navigation, so a reload stays here.
-		const url = new URL($page.url);
+		// Start from the address bar, not $page.url, which can still point at the previous form mid-navigation.
+		const url = new URL(location.href);
 		url.searchParams.set('tab', id);
 		history.replaceState(history.state, '', url);
 	}

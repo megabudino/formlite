@@ -10,7 +10,7 @@ export interface StatsScope {
 }
 
 export function parseRange(value: string | null): RangeKey {
-	return value === '24h' || value === '30d' ? value : '7d';
+	return value === '24h' || value === '7d' ? value : '30d';
 }
 
 function scopeFilter(scope: StatsScope): { sql: string; params: string[] } {
