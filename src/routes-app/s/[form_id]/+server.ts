@@ -1,7 +1,8 @@
 import { json, error, redirect } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import db from '$lib/db';
-import { sendToRecipients, sendEmail } from '$lib/email';
+import { sendToRecipients } from '$lib/email';
+import { sendAutoreply, autoreplyReady, visitorAddress } from '$lib/server/autoreply';
 import {
 	renderEmail,
 	DEFAULT_NOTIFY_SUBJECT,
@@ -22,10 +23,6 @@ function readLimit(name: string, fallback: number): number {
 // Max submissions per minute, per form. 0 disables the limit.
 const RATE_LIMIT_PER_IP = readLimit('SUBMISSION_RATE_LIMIT_PER_IP', 10);
 const RATE_LIMIT_PER_FORM = readLimit('SUBMISSION_RATE_LIMIT_PER_FORM', 120);
-
-// Auto-replies per recipient address, per form, per day. 0 disables the limit.
-const AUTOREPLY_LIMIT_PER_RECIPIENT = readLimit('AUTOREPLY_LIMIT_PER_RECIPIENT', 3);
-const AUTOREPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 const baseCorsHeaders = {
 	'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -309,15 +306,8 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 	);
 	const submissionId = Number(result.lastInsertRowid);
 
-	// Determine the visitor's address: reply_to takes precedence over email
-	const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-	let replyToEmail: string | undefined;
-
-	if (typeof cleanData.reply_to === 'string' && emailRegex.test(cleanData.reply_to.trim())) {
-		replyToEmail = cleanData.reply_to.trim();
-	} else if (typeof cleanData.email === 'string' && emailRegex.test(cleanData.email.trim())) {
-		replyToEmail = cleanData.email.trim();
-	}
+	// Replies to the notification go to the visitor
+	const replyToEmail = visitorAddress(cleanData);
 
 	const templateContext: TemplateContext = {
 		data: cleanData,
@@ -352,44 +342,9 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 			console.error(`[Email] Unexpected error sending emails for form "${form.name}":`, err);
 		});
 
-	// Auto-reply to the visitor, at most a few times a day per address so the form
-	// can't be used to flood someone else's inbox
-	if (form.autoreply_enabled && form.autoreply_subject && form.autoreply_body && replyToEmail) {
-		const recipient = replyToEmail;
-		const recipientLimit = consumeRateLimit(
-			`autoreply:${form_id}:${recipient.toLowerCase()}`,
-			AUTOREPLY_LIMIT_PER_RECIPIENT,
-			AUTOREPLY_WINDOW_MS
-		);
-
-		if (recipientLimit.allowed) {
-			const autoreply = renderEmail(
-				{
-					subject: form.autoreply_subject,
-					body: form.autoreply_body,
-					format: form.autoreply_format === 'html' ? 'html' : 'text'
-				},
-				templateContext,
-				{ clampValues: true }
-			);
-			sendEmail(recipient, {
-				...autoreply,
-				fromName: form.autoreply_from_name || undefined,
-				replyTo: form.autoreply_reply_to || undefined
-			})
-				.then((result) => {
-					if (result.success) {
-						console.log(`[Email] Auto-reply for form "${form.name}" sent to ${recipient}`);
-					} else {
-						console.error(`[Email] Auto-reply for form "${form.name}" to ${recipient} failed: ${result.error}`);
-					}
-				})
-				.catch((err) => {
-					console.error(`[Email] Unexpected error sending auto-reply for form "${form.name}":`, err);
-				});
-		} else {
-			console.log(`[Email] Auto-reply for form "${form.name}" to ${recipient} skipped: daily limit reached`);
-		}
+	// Auto-reply to the visitor; the outcome is recorded on the submission
+	if (autoreplyReady(form)) {
+		void sendAutoreply(form, submissionId, cleanData, templateContext.submittedAt);
 	}
 
 	// Dispatch webhooks asynchronously

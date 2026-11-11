@@ -61,6 +61,10 @@ Values typed by visitors are always escaped, so they can't add markup to an HTML
 
 To limit abuse (someone entering another person's address), values typed by visitors are cut to one short line in auto-replies and are never turned into links, and each address receives at most `AUTOREPLY_LIMIT_PER_RECIPIENT` auto-replies per form per day. The counter is kept in memory, like the other rate limits. Auto-replies are sent from `MAILGUN_FROM_EMAIL`; you can set the sender name and the Reply-To address per form.
 
+Each submission shows what happened to its auto-reply: sent, failed, skipped because of the daily limit, or not sent because there was no email address.
+
+When you turn the auto-reply on for a form that already has submissions, the Emails tab offers to **send it to past submissions** from the last 24 hours, 7 days or 30 days. Each address gets it once, from its latest submission; addresses that already received it are skipped. Up to 500 emails per run, sent one at a time.
+
 ### Rate limiting behind a reverse proxy
 
 Submissions are rate limited per client IP. Behind a reverse proxy (Traefik, Nginx, Dokploy, …) the app only sees the proxy's address unless you set `ADDRESS_HEADER=X-Forwarded-For`; without it, all visitors share the same per-IP limit. Counters are kept in memory, so they are per instance and reset on restart.

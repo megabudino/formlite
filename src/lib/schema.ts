@@ -91,6 +91,9 @@ CREATE TABLE IF NOT EXISTS submissions (
     form_id TEXT NOT NULL,
     data TEXT NOT NULL DEFAULT '{}',
     meta TEXT NOT NULL DEFAULT '{}',
+    autoreply_status TEXT,
+    autoreply_at TEXT,
+    autoreply_error TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (form_id) REFERENCES forms(id) ON DELETE CASCADE
 );

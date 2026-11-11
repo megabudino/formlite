@@ -23,6 +23,8 @@
 		allowedDomainError?: string;
 		notifyError?: string;
 		autoreplyError?: string;
+		backfillError?: string;
+		backfillQueued?: number;
 	};
 
 	type BlockedRequest = {
@@ -90,6 +92,11 @@
 	// Set when the switch is flipped on before the auto-reply was written
 	let autoreplyEnableOnSave = $state(false);
 	let autoreplyToggling = $state(false);
+	let backfillDialog: HTMLDialogElement | undefined = $state();
+	let backfillDays = $state(7);
+	let backfillSending = $state(false);
+	let backfillError = $state('');
+	let backfillQueued = $state<number | null>(null);
 	let showDeleteConfirm = $state(false);
 	let deleteConfirmName = $state('');
 
@@ -141,7 +148,22 @@
 		emailsFormId = data.form.id;
 		notifyDialogOpen = false;
 		autoreplyDialogOpen = false;
+		backfillQueued = null;
 	});
+
+	const backfillTotal = $derived(Math.max(0, ...emails.backfill.map((option) => option.count)));
+	const backfillCount = $derived(emails.backfill.find((option) => option.days === backfillDays)?.count ?? 0);
+
+	function openBackfill() {
+		// Start on the narrowest window that reaches someone
+		backfillDays = emails.backfill.find((option) => option.count > 0)?.days ?? 7;
+		backfillError = '';
+		backfillDialog?.showModal();
+	}
+
+	function windowLabel(days: number) {
+		return days === 1 ? 'Last 24 hours' : `Last ${days} days`;
+	}
 
 	function openAutoreplyEditor(enableOnSave: boolean) {
 		autoreplyEnableOnSave = enableOnSave;
@@ -569,6 +591,26 @@
 											</button>
 										</div>
 									{/if}
+									{#if backfillQueued !== null}
+										<div class="fl-alert fl-alert--success" role="status">
+											<Icon name="check-circle" size={20} class="fl-alert__icon" />
+											<div>
+												<strong>Sending the auto-reply to {backfillQueued} {backfillQueued === 1 ? 'person' : 'people'}.</strong>
+												Each submission shows when it's been sent.
+											</div>
+										</div>
+									{:else if emails.autoreplyEnabled && backfillTotal > 0}
+										<div class="flex flex-wrap items-center justify-between gap-3 rounded-md bg-surface-2 p-4">
+											<p class="m-0 text-sm">
+												<strong>Some people filled in the form before the auto-reply was on.</strong>
+												<span class="fl-muted">You can send it to them now.</span>
+											</p>
+											<button type="button" class="fl-btn fl-btn--secondary fl-btn--sm" onclick={openBackfill}>
+												<Icon name="mail" size={16} />
+												Send to past submissions
+											</button>
+										</div>
+									{/if}
 									<p class="fl-help m-0">
 										Each address gets at most a few auto-replies a day, so the form can't be used to flood
 										someone's inbox.
@@ -612,6 +654,95 @@
 					previewTo={visitorAddress}
 					defaultReplyTo={data.form.targetEmails[0] ?? ''}
 				/>
+
+				<dialog
+					bind:this={backfillDialog}
+					class="fl-dialog !w-[min(520px,calc(100vw-32px))]"
+					aria-labelledby="backfill-title"
+					onclick={(e) => {
+						if (e.target === backfillDialog) backfillDialog?.close();
+					}}
+				>
+					<form
+						method="POST"
+						action="?/sendAutoreplyToPast"
+						use:enhance={() => {
+							backfillSending = true;
+							backfillError = '';
+							return async ({ result, update }) => {
+								backfillSending = false;
+								if (result.type === 'success') {
+									backfillQueued = Number(result.data?.backfillQueued ?? 0);
+									backfillDialog?.close();
+									await update({ reset: false });
+								} else if (result.type === 'failure') {
+									backfillError = String(result.data?.backfillError ?? 'Could not send the auto-reply');
+								} else {
+									await update({ reset: false });
+								}
+							};
+						}}
+					>
+						<div class="fl-dialog__head">
+							<div>
+								<h2 id="backfill-title" class="fl-h3">Send to past submissions</h2>
+								<p class="fl-muted m-0 mt-1 text-sm">
+									Each person gets the auto-reply once, from their latest submission. People who already
+									received it are skipped.
+								</p>
+							</div>
+							<button
+								type="button"
+								class="fl-btn fl-btn--ghost fl-btn--sm fl-btn--icon !w-9"
+								aria-label="Close"
+								onclick={() => backfillDialog?.close()}
+							>
+								<Icon name="x" size={18} />
+							</button>
+						</div>
+						<div class="fl-dialog__body grid gap-4">
+							<fieldset class="m-0 grid gap-2 border-0 p-0">
+								<legend class="fl-label mb-2">Who filled in the form in the</legend>
+								{#each emails.backfill as option (option.days)}
+									<label
+										class="flex cursor-pointer items-center justify-between gap-3 rounded-md border border-line px-4 py-3 has-[:checked]:border-accent-text has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50"
+									>
+										<span class="flex items-center gap-3">
+											<input
+												type="radio"
+												name="days"
+												value={option.days}
+												bind:group={backfillDays}
+												disabled={option.count === 0}
+											/>
+											<span class="text-sm font-semibold">{windowLabel(option.days)}</span>
+										</span>
+										<span class="fl-muted text-sm">
+											{option.count === 0 ? 'Nobody new' : `${option.count} ${option.count === 1 ? 'person' : 'people'}`}
+										</span>
+									</label>
+								{/each}
+							</fieldset>
+							<p class="fl-help m-0">
+								An auto-reply that arrives days later can look odd: check the message still makes sense
+								before sending. Emails go out one at a time and can't be stopped once started.
+							</p>
+							{#if backfillError}
+								<span class="fl-error"><Icon name="alert" size={14} />{backfillError}</span>
+							{/if}
+						</div>
+						<div class="fl-dialog__foot">
+							<button type="button" class="fl-btn fl-btn--secondary" onclick={() => backfillDialog?.close()}>
+								Cancel
+							</button>
+							<button type="submit" disabled={backfillSending || backfillCount === 0} class="fl-btn fl-btn--primary">
+								{backfillSending
+									? 'Starting…'
+									: `Send ${backfillCount} ${backfillCount === 1 ? 'email' : 'emails'}`}
+							</button>
+						</div>
+					</form>
+				</dialog>
 			{:else if activeTab === 'settings'}
 				<section class="fl-card fl-scrollcard">
 					<div class="fl-scrollcard__body">

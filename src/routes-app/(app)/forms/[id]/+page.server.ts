@@ -13,6 +13,16 @@ import {
 	type BodyFormat
 } from '$lib/email-template';
 import { env } from '$env/dynamic/private';
+import {
+	findBackfillTargets,
+	backfillCounts,
+	startBackfill,
+	autoreplyReady,
+	BACKFILL_WINDOWS_DAYS,
+	BACKFILL_MAX,
+	type AutoreplySettings,
+	type AutoreplyStatus
+} from '$lib/server/autoreply';
 
 interface Form {
 	id: string;
@@ -48,6 +58,9 @@ interface Submission {
 	form_id: string;
 	data: string;
 	meta: string;
+	autoreply_status: AutoreplyStatus | null;
+	autoreply_at: string | null;
+	autoreply_error: string | null;
 	created_at: string;
 }
 
@@ -174,6 +187,8 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 			autoreplyFromName: form.autoreply_from_name ?? '',
 			autoreplyReplyTo: form.autoreply_reply_to ?? '',
 			fieldNames: [...fieldNames].slice(0, 30),
+			// People who filled in the form before and haven't had the auto-reply, per time window
+			backfill: autoreplyReady(form) ? backfillCounts(form.id) : [],
 			// Address only, for the From line of the previews
 			fromAddress: (env.MAILGUN_FROM_EMAIL ?? '').match(/<([^>]+)>/)?.[1] ?? env.MAILGUN_FROM_EMAIL ?? ''
 		},
@@ -190,7 +205,10 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 			id: s.id,
 			data: JSON.parse(s.data) as Record<string, unknown>,
 			meta: JSON.parse(s.meta) as Record<string, unknown>,
-			createdAt: s.created_at
+			createdAt: s.created_at,
+			autoreply: s.autoreply_status
+				? { status: s.autoreply_status, at: s.autoreply_at, error: s.autoreply_error }
+				: null
 		})),
 		blockedRequests: blockedRequests.map((blocked) => ({
 			id: blocked.id,
@@ -640,6 +658,40 @@ export const actions: Actions = {
 		).run(enabled ? 1 : 0, subject || null, body || null, format, fromName || null, replyTo || null, params.id);
 
 		return { autoreplySuccess: true };
+	},
+
+	sendAutoreplyToPast: async ({ params, locals, request }) => {
+		const user = locals.user;
+		if (!user) {
+			throw redirect(302, '/auth/login');
+		}
+
+		const form = db
+			.prepare(
+				`SELECT id, name, autoreply_enabled, autoreply_subject, autoreply_body, autoreply_format,
+					autoreply_from_name, autoreply_reply_to FROM forms WHERE id = ? AND user_id = ?`
+			)
+			.get(params.id, user.id) as AutoreplySettings | undefined;
+		if (!form) {
+			throw error(404, 'Form not found');
+		}
+		if (!autoreplyReady(form)) {
+			return fail(400, { backfillError: 'Turn on the auto-reply first' });
+		}
+
+		const days = Number.parseInt((await request.formData()).get('days')?.toString() ?? '', 10);
+		if (!(BACKFILL_WINDOWS_DAYS as readonly number[]).includes(days)) {
+			return fail(400, { backfillError: 'Choose how far back to go' });
+		}
+
+		const targets = findBackfillTargets(form.id, days).slice(0, BACKFILL_MAX);
+		if (targets.length === 0) {
+			return fail(400, { backfillError: 'Everyone in this period already has the auto-reply' });
+		}
+
+		startBackfill(form, targets);
+
+		return { backfillQueued: targets.length };
 	},
 
 	toggleAutoreply: async ({ params, locals, request }) => {
