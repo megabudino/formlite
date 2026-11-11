@@ -7,12 +7,15 @@
 	import IntegrationGuide from '$lib/ui/IntegrationGuide.svelte';
 	import Inbox from '$lib/ui/Inbox.svelte';
 	import WorkspaceShell from '$lib/ui/WorkspaceShell.svelte';
-	import EmailTemplateEditor from '$lib/ui/EmailTemplateEditor.svelte';
+	import EmailTemplateDialog from '$lib/ui/EmailTemplateDialog.svelte';
+	import EmailPreview from '$lib/ui/EmailPreview.svelte';
 	import {
+		renderEmail,
 		DEFAULT_NOTIFY_SUBJECT,
 		DEFAULT_NOTIFY_BODY,
 		SAMPLE_AUTOREPLY_SUBJECT,
-		SAMPLE_AUTOREPLY_BODY
+		SAMPLE_AUTOREPLY_BODY,
+		type EmailDraft
 	} from '$lib/email-template';
 	import { parseUtc } from '$lib/stats';
 
@@ -43,7 +46,7 @@
 		blockedPagination: BlockedPagination;
 	};
 
-	type TabId = 'submissions' | 'spam' | 'integration' | 'settings';
+	type TabId = 'submissions' | 'spam' | 'integration' | 'emails' | 'settings';
 
 	let { data, form }: { data: FormPageData; form: FormActionData } = $props();
 
@@ -55,7 +58,15 @@
 	function initialTab(): TabId {
 		const params = $page.url.searchParams;
 		const tab = params.get('tab');
-		if (tab === 'submissions' || tab === 'spam' || tab === 'integration' || tab === 'settings') return tab;
+		if (
+			tab === 'submissions' ||
+			tab === 'spam' ||
+			tab === 'integration' ||
+			tab === 'emails' ||
+			tab === 'settings'
+		) {
+			return tab;
+		}
 		if (params.has('spam_page')) return 'spam';
 		return data.pagination.totalSubmissions > 0 ? 'submissions' : 'integration';
 	}
@@ -74,53 +85,67 @@
 	let newWebhookUrl = $state('');
 	let webhookSaving = $state(false);
 	let revealedSecrets = $state<Set<string>>(new Set());
-	let notifyOpen = $state(false);
-	let notifySubject = $state(data.emails.notifySubject || DEFAULT_NOTIFY_SUBJECT);
-	let notifyBody = $state(data.emails.notifyBody || DEFAULT_NOTIFY_BODY);
-	let notifySaving = $state(false);
-	let notifySaved = $state(false);
-	let autoreplyEnabled = $state(data.emails.autoreplyEnabled);
-	let autoreplySubject = $state(data.emails.autoreplySubject);
-	let autoreplyBody = $state(data.emails.autoreplyBody);
-	let autoreplyFromName = $state(data.emails.autoreplyFromName);
-	let autoreplyReplyTo = $state(data.emails.autoreplyReplyTo);
-	let autoreplySaving = $state(false);
-	let autoreplySaved = $state(false);
+	let notifyDialogOpen = $state(false);
+	let autoreplyDialogOpen = $state(false);
+	// Set when the switch is flipped on before the auto-reply was written
+	let autoreplyEnableOnSave = $state(false);
+	let autoreplyToggling = $state(false);
 	let showDeleteConfirm = $state(false);
 	let deleteConfirmName = $state('');
 
 	const actionUrl = $derived(`${$page.url.origin}/s/${data.form.id}`);
 
-	const notifyCustomized = $derived(data.emails.notifySubject !== '' || data.emails.notifyBody !== '');
+	const emails = $derived(data.emails);
+	const notifyCustomized = $derived(emails.notifySubject !== '' || emails.notifyBody !== '');
+	const autoreplyWritten = $derived(emails.autoreplySubject !== '' && emails.autoreplyBody !== '');
+	const fromAddress = $derived(emails.fromAddress || 'noreply@your-domain.com');
 
 	// Previews use the latest submission, or sample values when there is none yet
 	const previewIsSample = $derived(data.submissions.length === 0);
 	const previewData = $derived(
 		data.submissions[0]?.data ?? { name: 'Jane', email: 'jane@example.com', message: 'Hello!' }
 	);
-	const previewFields = $derived(
-		data.emails.fieldNames.length > 0 ? data.emails.fieldNames : ['name', 'email', 'message']
+	const previewFields = $derived(emails.fieldNames.length > 0 ? emails.fieldNames : ['name', 'email', 'message']);
+	const visitorAddress = $derived(
+		[previewData.reply_to, previewData.email].find((v): v is string => typeof v === 'string' && v.includes('@')) ??
+			'jane@example.com'
 	);
+	const previewContext = $derived({
+		data: previewData,
+		formName: data.form.name,
+		submittedAt: new Date().toISOString()
+	});
 
-	// The page is reused when moving between forms: reload the email editors from the new form
+	const notifyDraft = $derived<EmailDraft>({
+		subject: emails.notifySubject || DEFAULT_NOTIFY_SUBJECT,
+		body: emails.notifyBody || DEFAULT_NOTIFY_BODY,
+		format: emails.notifyFormat,
+		fromName: '',
+		replyTo: ''
+	});
+	const autoreplyDraft = $derived<EmailDraft>({
+		subject: emails.autoreplySubject || SAMPLE_AUTOREPLY_SUBJECT,
+		body: emails.autoreplyBody || SAMPLE_AUTOREPLY_BODY,
+		format: emails.autoreplyFormat,
+		fromName: emails.autoreplyFromName,
+		replyTo: emails.autoreplyReplyTo
+	});
+
+	const notifyPreview = $derived(renderEmail(notifyDraft, previewContext));
+	const autoreplyPreview = $derived(renderEmail(autoreplyDraft, previewContext, { clampValues: true }));
+
+	// The page is reused when moving between forms: don't carry an open editor over
 	let emailsFormId = data.form.id;
 	$effect(() => {
 		if (data.form.id === emailsFormId) return;
 		emailsFormId = data.form.id;
-		notifyOpen = false;
-		notifySubject = data.emails.notifySubject || DEFAULT_NOTIFY_SUBJECT;
-		notifyBody = data.emails.notifyBody || DEFAULT_NOTIFY_BODY;
-		autoreplyEnabled = data.emails.autoreplyEnabled;
-		autoreplySubject = data.emails.autoreplySubject;
-		autoreplyBody = data.emails.autoreplyBody;
-		autoreplyFromName = data.emails.autoreplyFromName;
-		autoreplyReplyTo = data.emails.autoreplyReplyTo;
+		notifyDialogOpen = false;
+		autoreplyDialogOpen = false;
 	});
 
-	// Show a "Saved" tick on the button for a moment after a successful save
-	function flashSaved(set: (value: boolean) => void) {
-		set(true);
-		setTimeout(() => set(false), 3000);
+	function openAutoreplyEditor(enableOnSave: boolean) {
+		autoreplyEnableOnSave = enableOnSave;
+		autoreplyDialogOpen = true;
 	}
 
 	// While waiting for the first submission, check every few seconds so the page
@@ -179,6 +204,7 @@
 		{ id: 'submissions', label: 'Submissions', icon: 'inbox' },
 		{ id: 'spam', label: 'Spam', icon: 'shield' },
 		{ id: 'integration', label: 'Integration', icon: 'code' },
+		{ id: 'emails', label: 'Emails', icon: 'mail' },
 		{ id: 'settings', label: 'Settings', icon: 'settings' }
 	] as const;
 </script>
@@ -379,73 +405,22 @@
 						</div>
 					</div>
 				</section>
-			{:else if activeTab === 'settings'}
+			{:else if activeTab === 'emails'}
 				<section class="fl-card fl-scrollcard">
 					<div class="fl-scrollcard__body">
 						<div class="mx-auto max-w-[960px]">
-							<!-- Redirect -->
+							<!-- Notification -->
 							<div class="fl-setting">
 								<div>
-									<h2 class="fl-h3">Redirect after submit</h2>
+									<h2 class="fl-h3">Notification</h2>
 									<p class="fl-muted mt-1 text-sm">
-										Where people land after sending the form. Leave empty for the built-in thank-you page.
+										Sent to you and your team for every submission. Hit reply to answer the person who
+										filled in the form.
 									</p>
 								</div>
-								<form
-									method="POST"
-									action="?/updateRedirectUrl"
-									use:enhance={() => {
-										redirectSaving = true;
-										redirectSaved = false;
-										return async ({ update, result }) => {
-											redirectSaving = false;
-											if (result.type === 'success') {
-												redirectSaved = true;
-												setTimeout(() => {
-													redirectSaved = false;
-												}, 3000);
-											}
-											await update({ reset: false });
-										};
-									}}
-									class="fl-field"
-								>
-									<label for="redirect_url" class="fl-label">Redirect URL</label>
-									<div class="flex flex-col gap-2 sm:flex-row">
-										<input
-											type="url"
-											id="redirect_url"
-											name="redirect_url"
-											bind:value={redirectUrl}
-											placeholder="https://example.com/thank-you"
-											class="fl-input fl-input--mono sm:flex-1"
-											class:fl-input--error={form?.redirectUrlError}
-										/>
-										<button type="submit" disabled={redirectSaving} class="fl-btn fl-btn--secondary">
-											{#if redirectSaving}
-												Saving…
-											{:else if redirectSaved}
-												<Icon name="check" size={16} /> Saved
-											{:else}
-												Save
-											{/if}
-										</button>
-									</div>
-									{#if form?.redirectUrlError}
-										<span class="fl-error"><Icon name="alert" size={14} />{form.redirectUrlError}</span>
-									{/if}
-								</form>
-							</div>
-
-							<!-- Emails -->
-							<div class="fl-setting">
-								<div>
-									<h2 class="fl-h3">Email notifications</h2>
-									<p class="fl-muted mt-1 text-sm">
-										Every submission is sent to these addresses. You can change what the email says.
-									</p>
-								</div>
-								<div class="grid gap-3">
+								<div class="grid gap-5">
+									<div class="grid gap-3">
+										<span class="fl-label">Recipients</span>
 									<div class="flex flex-wrap gap-2">
 										{#each data.form.targetEmails as email (email)}
 											<span class="fl-chip">
@@ -503,88 +478,21 @@
 											<span class="fl-error"><Icon name="alert" size={14} />{form.emailError}</span>
 										{/if}
 									</form>
-
-									{#if !notifyOpen}
-										<div class="flex flex-wrap items-center gap-3">
-											<button
-												type="button"
-												class="fl-btn fl-btn--ghost fl-btn--sm"
-												onclick={() => (notifyOpen = true)}
-											>
-												<Icon name="mail" size={16} />
-												Customize email
-											</button>
-											<span class="fl-help">
-												{notifyCustomized ? 'Using your custom email.' : 'Using the default email.'}
-											</span>
+									</div>
+									<div class="grid gap-3">
+										<div class="flex items-center gap-2">
+											<span class="fl-label">Email</span>
+											<span class="fl-badge fl-badge--plain">{notifyCustomized ? 'Custom' : 'Default'}</span>
 										</div>
-									{:else}
-										<form
-											method="POST"
-											action="?/updateNotificationEmail"
-											use:enhance={({ formData }) => {
-												notifySaving = true;
-												notifySaved = false;
-												const reset = formData.get('reset') === '1';
-												return async ({ update, result }) => {
-													notifySaving = false;
-													if (result.type === 'success') {
-														if (reset) {
-															notifySubject = DEFAULT_NOTIFY_SUBJECT;
-															notifyBody = DEFAULT_NOTIFY_BODY;
-														}
-														flashSaved((v) => (notifySaved = v));
-													}
-													await update({ reset: false });
-												};
-											}}
-											class="grid gap-4 rounded-md border border-line p-4"
-										>
-											<EmailTemplateEditor
-												idPrefix="notify"
-												subjectName="notify_subject"
-												bodyName="notify_body"
-												bind:subject={notifySubject}
-												bind:body={notifyBody}
-												fieldNames={previewFields}
-												{previewData}
-												{previewIsSample}
-												formName={data.form.name}
-												subjectPlaceholder={DEFAULT_NOTIFY_SUBJECT}
-												bodyPlaceholder={DEFAULT_NOTIFY_BODY}
-											/>
-											{#if form?.notifyError}
-												<span class="fl-error"><Icon name="alert" size={14} />{form.notifyError}</span>
-											{/if}
-											<div class="flex flex-wrap gap-2">
-												<button type="submit" disabled={notifySaving} class="fl-btn fl-btn--secondary">
-													{#if notifySaving}
-														Saving…
-													{:else if notifySaved}
-														<Icon name="check" size={16} /> Saved
-													{:else}
-														Save email
-													{/if}
-												</button>
-												<button
-													type="submit"
-													name="reset"
-													value="1"
-													disabled={notifySaving}
-													class="fl-btn fl-btn--ghost"
-												>
-													Restore default
-												</button>
-												<button
-													type="button"
-													class="fl-btn fl-btn--ghost"
-													onclick={() => (notifyOpen = false)}
-												>
-													Close
-												</button>
-											</div>
-										</form>
-									{/if}
+										{@render emailCard(
+											notifyPreview.subject,
+											notifyPreview.html,
+											fromAddress,
+											data.form.targetEmails.join(', '),
+											visitorAddress,
+											() => (notifyDialogOpen = true)
+										)}
+									</div>
 								</div>
 							</div>
 
@@ -593,98 +501,172 @@
 								<div>
 									<h2 class="fl-h3">Auto-reply</h2>
 									<p class="fl-muted mt-1 text-sm">
-										Send an email to whoever fills in the form, like a download link for a lead magnet.
-										It goes to the address in the <code class="fl-code">email</code> field.
+										Sent to whoever fills in the form, at the address in the <code class="fl-code">email</code>
+										field. Great for delivering a lead magnet.
+									</p>
+								</div>
+								<div class="grid gap-5">
+									<form
+										method="POST"
+										action="?/toggleAutoreply"
+										use:enhance={() => {
+											autoreplyToggling = true;
+											return async ({ update }) => {
+												autoreplyToggling = false;
+												await update({ reset: false });
+											};
+										}}
+										class="m-0"
+									>
+										<input type="hidden" name="enabled" value={emails.autoreplyEnabled ? '0' : '1'} />
+										<label class="fl-switch">
+											<input
+												type="checkbox"
+												checked={emails.autoreplyEnabled}
+												disabled={autoreplyToggling}
+												onchange={(e) => {
+													// Nothing written yet: open the editor, the switch turns on when it's saved
+													if (e.currentTarget.checked && !autoreplyWritten) {
+														e.currentTarget.checked = false;
+														openAutoreplyEditor(true);
+														return;
+													}
+													e.currentTarget.form?.requestSubmit();
+												}}
+											/>
+											{emails.autoreplyEnabled ? 'Auto-reply is on' : 'Auto-reply is off'}
+										</label>
+									</form>
+									{#if form?.autoreplyError}
+										<span class="fl-error"><Icon name="alert" size={14} />{form.autoreplyError}</span>
+									{/if}
+
+									{#if autoreplyWritten}
+										<div class:opacity-60={!emails.autoreplyEnabled}>
+											{@render emailCard(
+												autoreplyPreview.subject,
+												autoreplyPreview.html,
+												emails.autoreplyFromName ? `${emails.autoreplyFromName} <${fromAddress}>` : fromAddress,
+												visitorAddress,
+												emails.autoreplyReplyTo,
+												() => openAutoreplyEditor(false)
+											)}
+										</div>
+									{:else}
+										<div class="grid place-items-center rounded-md bg-surface-2 px-6 py-10 text-center">
+											<span class="fl-card__tile"><Icon name="mail" /></span>
+											<p class="mt-3 font-semibold">No auto-reply yet</p>
+											<p class="fl-muted mt-1 max-w-xs text-sm">
+												Thank people for signing up and send them the link to your download.
+											</p>
+											<button
+												type="button"
+												class="fl-btn fl-btn--secondary fl-btn--sm mt-5"
+												onclick={() => openAutoreplyEditor(false)}
+											>
+												<Icon name="plus" size={16} />
+												Write auto-reply
+											</button>
+										</div>
+									{/if}
+									<p class="fl-help m-0">
+										Each address gets at most a few auto-replies a day, so the form can't be used to flood
+										someone's inbox.
+									</p>
+								</div>
+							</div>
+						</div>
+					</div>
+				</section>
+
+				<EmailTemplateDialog
+					bind:open={notifyDialogOpen}
+					title="Notification email"
+					description="What you receive for every submission."
+					action="?/updateNotificationEmail"
+					errorKey="notifyError"
+					initial={notifyDraft}
+					allowReset={notifyCustomized}
+					fieldNames={previewFields}
+					{previewData}
+					{previewIsSample}
+					formName={data.form.name}
+					{fromAddress}
+					previewTo={data.form.targetEmails.join(', ')}
+				/>
+				<EmailTemplateDialog
+					bind:open={autoreplyDialogOpen}
+					title="Auto-reply"
+					description="Sent to the person who fills in the form. Values they type are cut to one short line."
+					action="?/updateAutoreply"
+					errorKey="autoreplyError"
+					initial={autoreplyDraft}
+					withSender
+					enableOnSave={autoreplyEnableOnSave && !emails.autoreplyEnabled}
+					clampValues
+					fieldNames={previewFields}
+					{previewData}
+					{previewIsSample}
+					formName={data.form.name}
+					{fromAddress}
+					previewTo={visitorAddress}
+					defaultReplyTo={data.form.targetEmails[0] ?? ''}
+				/>
+			{:else if activeTab === 'settings'}
+				<section class="fl-card fl-scrollcard">
+					<div class="fl-scrollcard__body">
+						<div class="mx-auto max-w-[960px]">
+							<!-- Redirect -->
+							<div class="fl-setting">
+								<div>
+									<h2 class="fl-h3">Redirect after submit</h2>
+									<p class="fl-muted mt-1 text-sm">
+										Where people land after sending the form. Leave empty for the built-in thank-you page.
 									</p>
 								</div>
 								<form
 									method="POST"
-									action="?/updateAutoreply"
+									action="?/updateRedirectUrl"
 									use:enhance={() => {
-										autoreplySaving = true;
-										autoreplySaved = false;
+										redirectSaving = true;
+										redirectSaved = false;
 										return async ({ update, result }) => {
-											autoreplySaving = false;
+											redirectSaving = false;
 											if (result.type === 'success') {
-												flashSaved((v) => (autoreplySaved = v));
+												redirectSaved = true;
+												setTimeout(() => {
+													redirectSaved = false;
+												}, 3000);
 											}
 											await update({ reset: false });
 										};
 									}}
-									class="grid gap-4"
+									class="fl-field"
 								>
-									<input type="hidden" name="autoreply_enabled" value={autoreplyEnabled ? '1' : '0'} />
-									<label class="fl-switch">
-										<input type="checkbox" bind:checked={autoreplyEnabled} />
-										Send an auto-reply
-									</label>
-
-									{#if autoreplyEnabled}
-										<div class="grid gap-4 sm:grid-cols-2">
-											<div class="fl-field">
-												<label for="autoreply_from_name" class="fl-label">Sender name</label>
-												<input
-													type="text"
-													id="autoreply_from_name"
-													name="autoreply_from_name"
-													bind:value={autoreplyFromName}
-													placeholder="Jane from Acme"
-													maxlength="80"
-													class="fl-input"
-												/>
-											</div>
-											<div class="fl-field">
-												<label for="autoreply_reply_to" class="fl-label">Replies go to</label>
-												<input
-													type="email"
-													id="autoreply_reply_to"
-													name="autoreply_reply_to"
-													bind:value={autoreplyReplyTo}
-													placeholder={data.form.targetEmails[0] ?? 'you@example.com'}
-													class="fl-input"
-												/>
-											</div>
-										</div>
-										<EmailTemplateEditor
-											idPrefix="autoreply"
-											subjectName="autoreply_subject"
-											bodyName="autoreply_body"
-											bind:subject={autoreplySubject}
-											bind:body={autoreplyBody}
-											fieldNames={previewFields}
-											{previewData}
-											{previewIsSample}
-											formName={data.form.name}
-											clampValues
-											subjectPlaceholder={SAMPLE_AUTOREPLY_SUBJECT}
-											bodyPlaceholder={SAMPLE_AUTOREPLY_BODY}
+									<label for="redirect_url" class="fl-label">Redirect URL</label>
+									<div class="flex flex-col gap-2 sm:flex-row">
+										<input
+											type="url"
+											id="redirect_url"
+											name="redirect_url"
+											bind:value={redirectUrl}
+											placeholder="https://example.com/thank-you"
+											class="fl-input fl-input--mono sm:flex-1"
+											class:fl-input--error={form?.redirectUrlError}
 										/>
-										<span class="fl-help">
-											Each address gets at most a few auto-replies a day, so the form can't be used to flood
-											someone's inbox. Values typed by visitors are cut to one short line.
-										</span>
-									{:else}
-										<!-- Keep the saved text when turning the auto-reply off -->
-										<input type="hidden" name="autoreply_subject" value={autoreplySubject} />
-										<input type="hidden" name="autoreply_body" value={autoreplyBody} />
-										<input type="hidden" name="autoreply_from_name" value={autoreplyFromName} />
-										<input type="hidden" name="autoreply_reply_to" value={autoreplyReplyTo} />
-									{/if}
-
-									{#if form?.autoreplyError}
-										<span class="fl-error"><Icon name="alert" size={14} />{form.autoreplyError}</span>
-									{/if}
-									<div>
-										<button type="submit" disabled={autoreplySaving} class="fl-btn fl-btn--secondary">
-											{#if autoreplySaving}
+										<button type="submit" disabled={redirectSaving} class="fl-btn fl-btn--secondary">
+											{#if redirectSaving}
 												Saving…
-											{:else if autoreplySaved}
+											{:else if redirectSaved}
 												<Icon name="check" size={16} /> Saved
 											{:else}
-												Save auto-reply
+												Save
 											{/if}
 										</button>
 									</div>
+									{#if form?.redirectUrlError}
+										<span class="fl-error"><Icon name="alert" size={14} />{form.redirectUrlError}</span>
+									{/if}
 								</form>
 							</div>
 
@@ -924,6 +906,23 @@
 </div>
 {/snippet}
 
+
+{#snippet emailCard(
+	subject: string,
+	html: string,
+	from: string,
+	to: string,
+	replyTo: string,
+	onopen: () => void
+)}
+	<button type="button" class="fl-emailcard" onclick={onopen} aria-label="Edit email: {subject}">
+		<EmailPreview {subject} {html} {from} {to} {replyTo} compact />
+		<span class="fl-btn fl-btn--primary fl-btn--sm fl-emailcard__cta">
+			<Icon name="settings" size={16} />
+			Edit email
+		</span>
+	</button>
+{/snippet}
 
 {#snippet pageNav(current: number, total: number, hasPrev: boolean, hasNext: boolean, param: string)}
 	<nav class="flex items-center justify-between gap-4 border-t border-line pt-5" aria-label="Pagination">

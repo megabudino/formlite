@@ -50,14 +50,16 @@ A self-hosted Formspree alternative - multi-tenant form backend with email notif
 
 ### Notification email and auto-reply
 
-In a form's **Settings** you can change the subject and text of the notification email, and turn on an **auto-reply** sent to whoever fills in the form (for example, the download link of a lead magnet). The auto-reply goes to the address in the `reply_to` or `email` field.
+In a form's **Emails** tab you can change the notification email, and turn on an **auto-reply** sent to whoever fills in the form (for example, the download link of a lead magnet). The auto-reply goes to the address in the `reply_to` or `email` field. Each email shows a live preview; click it to open the editor.
 
-Both are plain text with placeholders:
+Emails can be written as plain text or HTML, with placeholders:
 
 - `{{name}}`, `{{email}}`, … any field of the form. Nested fields use dots: `address[city]` becomes `{{address.city}}`. Missing fields stay blank.
 - `{{form_name}}`, `{{submitted_at}}` and `{{all_fields}}` (every field, one per line).
 
-Links you write in the template become clickable. To limit abuse (someone entering another person's address), values typed by visitors are cut to one short line in auto-replies and are never turned into links, and each address receives at most `AUTOREPLY_LIMIT_PER_RECIPIENT` auto-replies per form per day. The counter is kept in memory, like the other rate limits. Auto-replies are sent from `MAILGUN_FROM_EMAIL`; you can set the sender name and the Reply-To address per form.
+Values typed by visitors are always escaped, so they can't add markup to an HTML email. HTML emails also get a plain-text version for clients that don't show HTML. In plain-text emails, links you write become clickable.
+
+To limit abuse (someone entering another person's address), values typed by visitors are cut to one short line in auto-replies and are never turned into links, and each address receives at most `AUTOREPLY_LIMIT_PER_RECIPIENT` auto-replies per form per day. The counter is kept in memory, like the other rate limits. Auto-replies are sent from `MAILGUN_FROM_EMAIL`; you can set the sender name and the Reply-To address per form.
 
 ### Rate limiting behind a reverse proxy
 

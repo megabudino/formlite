@@ -8,8 +8,11 @@ import {
 	DEFAULT_NOTIFY_SUBJECT,
 	DEFAULT_NOTIFY_BODY,
 	MAX_SUBJECT_LENGTH,
-	MAX_BODY_LENGTH
+	MAX_BODY_LENGTH,
+	isBodyFormat,
+	type BodyFormat
 } from '$lib/email-template';
+import { env } from '$env/dynamic/private';
 
 interface Form {
 	id: string;
@@ -23,9 +26,11 @@ interface Form {
 	created_at: string;
 	notify_subject: string | null;
 	notify_body: string | null;
+	notify_format: string;
 	autoreply_enabled: number;
 	autoreply_subject: string | null;
 	autoreply_body: string | null;
+	autoreply_format: string;
 	autoreply_from_name: string | null;
 	autoreply_reply_to: string | null;
 }
@@ -161,12 +166,16 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 		emails: {
 			notifySubject: form.notify_subject ?? '',
 			notifyBody: form.notify_body ?? '',
+			notifyFormat: (form.notify_body && form.notify_format === 'html' ? 'html' : 'text') as BodyFormat,
 			autoreplyEnabled: form.autoreply_enabled === 1,
 			autoreplySubject: form.autoreply_subject ?? '',
 			autoreplyBody: form.autoreply_body ?? '',
+			autoreplyFormat: (form.autoreply_format === 'html' ? 'html' : 'text') as BodyFormat,
 			autoreplyFromName: form.autoreply_from_name ?? '',
 			autoreplyReplyTo: form.autoreply_reply_to ?? '',
-			fieldNames: [...fieldNames].slice(0, 30)
+			fieldNames: [...fieldNames].slice(0, 30),
+			// Address only, for the From line of the previews
+			fromAddress: (env.MAILGUN_FROM_EMAIL ?? '').match(/<([^>]+)>/)?.[1] ?? env.MAILGUN_FROM_EMAIL ?? ''
 		},
 		workspace: workspace
 			? { id: workspace.id, name: workspace.name }
@@ -234,6 +243,18 @@ function normalizeAllowedDomain(domain: string): { normalized: string; error?: s
 		};
 	}
 	return { normalized };
+}
+
+function readFormat(value: FormDataEntryValue | null): BodyFormat {
+	return isBodyFormat(value) ? value : 'text';
+}
+
+function readSubject(value: FormDataEntryValue | null): string {
+	return value?.toString().trim() ?? '';
+}
+
+function readBody(value: FormDataEntryValue | null): string {
+	return value?.toString().replace(/\r\n/g, '\n').trim() ?? '';
 }
 
 function validateTemplate(subject: string, body: string, required: boolean): string | null {
@@ -556,8 +577,9 @@ export const actions: Actions = {
 
 		const formData = await request.formData();
 		const reset = formData.get('reset') === '1';
-		let subject = reset ? '' : (formData.get('notify_subject')?.toString().trim() ?? '');
-		let body = reset ? '' : (formData.get('notify_body')?.toString().replace(/\r\n/g, '\n').trim() ?? '');
+		const format = readFormat(formData.get('format'));
+		let subject = reset ? '' : readSubject(formData.get('subject'));
+		let body = reset ? '' : readBody(formData.get('body'));
 
 		const templateError = validateTemplate(subject, body, false);
 		if (templateError) {
@@ -566,34 +588,40 @@ export const actions: Actions = {
 
 		// Saving the defaults unchanged keeps the form on the built-in template
 		if (subject === DEFAULT_NOTIFY_SUBJECT) subject = '';
-		if (body === DEFAULT_NOTIFY_BODY) body = '';
+		if (format === 'text' && body === DEFAULT_NOTIFY_BODY) body = '';
 
-		db.prepare('UPDATE forms SET notify_subject = ?, notify_body = ? WHERE id = ?').run(
+		db.prepare('UPDATE forms SET notify_subject = ?, notify_body = ?, notify_format = ? WHERE id = ?').run(
 			subject || null,
 			body || null,
+			body ? format : 'text',
 			params.id
 		);
 
 		return { notifySuccess: true };
 	},
 
+	// Saves the auto-reply content. Sending "enable" turns it on in the same step,
+	// for when the switch is flipped before anything was written.
 	updateAutoreply: async ({ params, locals, request }) => {
 		const user = locals.user;
 		if (!user) {
 			throw redirect(302, '/auth/login');
 		}
 
-		const form = db.prepare('SELECT id FROM forms WHERE id = ? AND user_id = ?').get(params.id, user.id);
+		const form = db
+			.prepare('SELECT autoreply_enabled FROM forms WHERE id = ? AND user_id = ?')
+			.get(params.id, user.id) as { autoreply_enabled: number } | undefined;
 		if (!form) {
 			throw error(404, 'Form not found');
 		}
 
 		const formData = await request.formData();
-		const enabled = formData.get('autoreply_enabled') === '1';
-		const subject = formData.get('autoreply_subject')?.toString().trim() ?? '';
-		const body = formData.get('autoreply_body')?.toString().replace(/\r\n/g, '\n').trim() ?? '';
-		const fromName = formData.get('autoreply_from_name')?.toString().trim() ?? '';
-		const replyTo = formData.get('autoreply_reply_to')?.toString().trim().toLowerCase() ?? '';
+		const enabled = form.autoreply_enabled === 1 || formData.get('enable') === '1';
+		const format = readFormat(formData.get('format'));
+		const subject = readSubject(formData.get('subject'));
+		const body = readBody(formData.get('body'));
+		const fromName = formData.get('from_name')?.toString().trim() ?? '';
+		const replyTo = formData.get('reply_to')?.toString().trim().toLowerCase() ?? '';
 
 		const templateError = validateTemplate(subject, body, enabled);
 		if (templateError) {
@@ -607,11 +635,34 @@ export const actions: Actions = {
 		}
 
 		db.prepare(
-			`UPDATE forms SET autoreply_enabled = ?, autoreply_subject = ?, autoreply_body = ?,
+			`UPDATE forms SET autoreply_enabled = ?, autoreply_subject = ?, autoreply_body = ?, autoreply_format = ?,
 				autoreply_from_name = ?, autoreply_reply_to = ? WHERE id = ?`
-		).run(enabled ? 1 : 0, subject || null, body || null, fromName || null, replyTo || null, params.id);
+		).run(enabled ? 1 : 0, subject || null, body || null, format, fromName || null, replyTo || null, params.id);
 
 		return { autoreplySuccess: true };
+	},
+
+	toggleAutoreply: async ({ params, locals, request }) => {
+		const user = locals.user;
+		if (!user) {
+			throw redirect(302, '/auth/login');
+		}
+
+		const form = db
+			.prepare('SELECT autoreply_subject, autoreply_body FROM forms WHERE id = ? AND user_id = ?')
+			.get(params.id, user.id) as { autoreply_subject: string | null; autoreply_body: string | null } | undefined;
+		if (!form) {
+			throw error(404, 'Form not found');
+		}
+
+		const enabled = (await request.formData()).get('enabled') === '1';
+		if (enabled && (!form.autoreply_subject || !form.autoreply_body)) {
+			return fail(400, { autoreplyError: 'Write the auto-reply before turning it on' });
+		}
+
+		db.prepare('UPDATE forms SET autoreply_enabled = ? WHERE id = ?').run(enabled ? 1 : 0, params.id);
+
+		return { autoreplyToggled: true };
 	},
 
 	deleteForm: async ({ params, locals }) => {

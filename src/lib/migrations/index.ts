@@ -3,6 +3,7 @@ import { migration as addAllowedDomains } from './001_add_allowed_domains';
 import { migration as addWorkspaces } from './002_add_workspaces';
 import { migration as addSessionOidcIdToken } from './003_add_session_oidc_id_token';
 import { migration as addFormEmailTemplates } from './004_add_form_email_templates';
+import { migration as addEmailFormats } from './005_add_email_formats';
 
 type Migration = {
 	id: string;
@@ -13,7 +14,8 @@ const migrations: Migration[] = [
 	addAllowedDomains,
 	addWorkspaces,
 	addSessionOidcIdToken,
-	addFormEmailTemplates
+	addFormEmailTemplates,
+	addEmailFormats
 ];
 
 function runMigrations(db: Database.Database): void {

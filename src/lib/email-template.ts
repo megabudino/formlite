@@ -1,6 +1,6 @@
 // Email templates for form notifications and auto-replies.
-// Plain text with {{field}} placeholders. Shared by the server (sending) and the
-// dashboard (live preview), so it must not import anything server-only.
+// Plain text or HTML with {{field}} placeholders. Shared by the server (sending) and
+// the dashboard (live preview), so it must not import anything server-only.
 
 export interface TemplateContext {
 	data: Record<string, unknown>;
@@ -12,6 +12,23 @@ export interface RenderedEmail {
 	subject: string;
 	text: string;
 	html: string;
+}
+
+export type BodyFormat = 'text' | 'html';
+
+// What the dashboard editor works on
+export interface EmailDraft {
+	subject: string;
+	body: string;
+	format: BodyFormat;
+	fromName: string;
+	replyTo: string;
+}
+
+export interface EmailTemplate {
+	subject: string;
+	body: string;
+	format?: BodyFormat;
 }
 
 // Built-in variables. They win over submitted fields with the same name.
@@ -26,13 +43,19 @@ export const SAMPLE_AUTOREPLY_BODY =
 	'Hi {{name}},\n\nthanks for signing up. Here is the link to download your guide:\n\nhttps://example.com/guide.pdf\n\nSee you soon!';
 
 export const MAX_SUBJECT_LENGTH = 200;
-export const MAX_BODY_LENGTH = 20_000;
+export const MAX_BODY_LENGTH = 100_000;
 
 // Auto-replies go to whatever address the visitor typed, so their own values are
 // kept short and on one line: a stranger can't turn the email into a long message.
 const MAX_AUTOREPLY_VALUE_LENGTH = 100;
 
 const PLACEHOLDER = /\{\{\s*([\w.-]+)\s*\}\}/g;
+
+const FONT_STACK = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+
+export function isBodyFormat(value: unknown): value is BodyFormat {
+	return value === 'text' || value === 'html';
+}
 
 function formatValue(value: unknown): string {
 	if (value === undefined || value === null) return '';
@@ -89,7 +112,7 @@ function split(template: string, ctx: TemplateContext, clampValues: boolean): Pa
 	return parts;
 }
 
-function escapeHtml(text: string): string {
+export function escapeHtml(text: string): string {
 	return text
 		.replace(/&/g, '&amp;')
 		.replace(/</g, '&lt;')
@@ -98,35 +121,94 @@ function escapeHtml(text: string): string {
 		.replace(/'/g, '&#39;');
 }
 
-// Only links the owner wrote in the template become clickable, never links typed by visitors.
+const URL_PATTERN = /https?:\/\/[^\s<]+[^\s<.,;:!?)\]'"]/g;
+
 function linkify(escaped: string): string {
-	return escaped.replace(/https?:\/\/[^\s<]+[^\s<.,;:!?)\]'"]/g, (url) => `<a href="${url}">${url}</a>`);
+	return escaped.replace(URL_PATTERN, (url) => `<a href="${url}">${url}</a>`);
 }
 
-function toHtml(parts: Part[]): string {
-	const body = parts
-		.map((part) => (part.fromTemplate ? linkify(escapeHtml(part.text)) : escapeHtml(part.text)))
-		.join('')
-		.replace(/\r?\n/g, '<br>\n');
-	return `<!doctype html><html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.6;color:#1a1a1a">${body}</body></html>`;
+// Visitor values are always escaped, so a field can never inject markup
+function escapeValue(value: string): string {
+	return escapeHtml(value).replace(/\r?\n/g, '<br>');
 }
 
-export function renderEmail(
-	template: { subject: string; body: string },
-	ctx: TemplateContext,
-	options: { clampValues?: boolean } = {}
-): RenderedEmail {
-	const clampValues = options.clampValues ?? false;
-	const subject = split(template.subject, ctx, clampValues)
+// A full document is sent as written; a fragment gets a minimal readable layout
+function wrapHtml(body: string): string {
+	if (/<html[\s>]/i.test(body)) return body;
+	return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:24px;font-family:${FONT_STACK};font-size:15px;line-height:1.6;color:#1a1a1a;background:#ffffff">${body}</body></html>`;
+}
+
+const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+
+function decodeEntities(text: string): string {
+	return text.replace(/&(#x[\da-f]+|#\d+|\w+);/gi, (entity, code: string) => {
+		if (code[0] === '#') {
+			const point = code[1] === 'x' || code[1] === 'X' ? parseInt(code.slice(2), 16) : parseInt(code.slice(1), 10);
+			return Number.isFinite(point) ? String.fromCodePoint(point) : entity;
+		}
+		return ENTITIES[code.toLowerCase()] ?? entity;
+	});
+}
+
+// Plain-text version of an HTML email, for clients that don't show HTML
+export function htmlToText(html: string): string {
+	return decodeEntities(
+		html
+			.replace(/<(head|style|script|title)[\s\S]*?<\/\1>/gi, '')
+			// Line breaks in HTML source are just spaces; tags decide where lines end
+			.replace(/\s*\n\s*/g, ' ')
+			.replace(/<a\s[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (_, href: string, label: string) => {
+				const text = label.replace(/<[^>]+>/g, '').trim();
+				return !text || text === href ? href : `${text} (${href})`;
+			})
+			.replace(/<br\s*\/?>/gi, '\n')
+			.replace(/<li[^>]*>/gi, '\n- ')
+			.replace(/<\/(p|div|h[1-6]|ul|ol|table|tr|blockquote)>/gi, '\n\n')
+			.replace(/<hr[^>]*>/gi, '\n---\n')
+			.replace(/<[^>]+>/g, '')
+	)
+		.replace(/[ \t]+/g, ' ')
+		.replace(/ *\n */g, '\n')
+		.replace(/\n{3,}/g, '\n\n')
+		.trim();
+}
+
+// Starting point when switching a plain-text template to HTML: paragraphs and links
+export function textToHtml(text: string): string {
+	return text
+		.trim()
+		.split(/\n{2,}/)
+		.map((paragraph) => `<p>${linkify(escapeHtml(paragraph)).replace(/\n/g, '<br>\n')}</p>`)
+		.join('\n');
+}
+
+export function renderSubject(template: string, ctx: TemplateContext, clampValues = false): string {
+	return split(template, ctx, clampValues)
 		.map((part) => part.text)
 		.join('')
 		.replace(/[\r\n]+/g, ' ')
 		.trim()
 		.slice(0, MAX_SUBJECT_LENGTH);
-	const bodyParts = split(template.body, ctx, clampValues);
-	return {
-		subject,
-		text: bodyParts.map((part) => part.text).join(''),
-		html: toHtml(bodyParts)
-	};
+}
+
+export function renderEmail(
+	template: EmailTemplate,
+	ctx: TemplateContext,
+	options: { clampValues?: boolean } = {}
+): RenderedEmail {
+	const clampValues = options.clampValues ?? false;
+	const subject = renderSubject(template.subject, ctx, clampValues);
+	const parts = split(template.body, ctx, clampValues);
+
+	if (template.format === 'html') {
+		const html = wrapHtml(parts.map((part) => (part.fromTemplate ? part.text : escapeValue(part.text))).join(''));
+		return { subject, html, text: htmlToText(html) };
+	}
+
+	// Plain text: only links the owner wrote become clickable, never links typed by visitors
+	const body = parts
+		.map((part) => (part.fromTemplate ? linkify(escapeHtml(part.text)) : escapeHtml(part.text)))
+		.join('')
+		.replace(/\r?\n/g, '<br>\n');
+	return { subject, text: parts.map((part) => part.text).join(''), html: wrapHtml(body) };
 }

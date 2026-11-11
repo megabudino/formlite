@@ -147,9 +147,11 @@ interface Form {
 	created_at: string;
 	notify_subject: string | null;
 	notify_body: string | null;
+	notify_format: string;
 	autoreply_enabled: number;
 	autoreply_subject: string | null;
 	autoreply_body: string | null;
+	autoreply_format: string;
 	autoreply_from_name: string | null;
 	autoreply_reply_to: string | null;
 }
@@ -328,7 +330,8 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 	const notification = renderEmail(
 		{
 			subject: form.notify_subject || DEFAULT_NOTIFY_SUBJECT,
-			body: form.notify_body || DEFAULT_NOTIFY_BODY
+			body: form.notify_body || DEFAULT_NOTIFY_BODY,
+			format: form.notify_body && form.notify_format === 'html' ? 'html' : 'text'
 		},
 		templateContext
 	);
@@ -361,7 +364,11 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 
 		if (recipientLimit.allowed) {
 			const autoreply = renderEmail(
-				{ subject: form.autoreply_subject, body: form.autoreply_body },
+				{
+					subject: form.autoreply_subject,
+					body: form.autoreply_body,
+					format: form.autoreply_format === 'html' ? 'html' : 'text'
+				},
 				templateContext,
 				{ clampValues: true }
 			);

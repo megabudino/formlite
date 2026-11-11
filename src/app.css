@@ -701,6 +701,147 @@ select.fl-input {
 	}
 }
 
+.fl-dialog__foot {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 8px;
+	padding: 16px 24px;
+	border-top: 1px solid var(--line);
+}
+
+/* Email editor dialog: form on the left, live preview on the right */
+.fl-dialog.fl-dialog--editor {
+	width: min(1240px, calc(100vw - 32px));
+	height: calc(100dvh - 48px);
+}
+.fl-editor {
+	display: grid;
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+}
+.fl-editor__form {
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+	padding: 24px;
+}
+.fl-editor__message {
+	flex: 1;
+	grid-template-rows: auto 1fr auto;
+}
+.fl-input.fl-editor__textarea {
+	height: auto;
+	min-height: 280px;
+	padding: 12px 14px;
+	line-height: 1.6;
+	resize: vertical;
+}
+.fl-editor__preview {
+	padding: 24px;
+	background: var(--surface-2);
+}
+@media (min-width: 1024px) {
+	.fl-editor {
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+		overflow: hidden;
+	}
+	.fl-editor__form,
+	.fl-editor__preview {
+		overflow-y: auto;
+	}
+	.fl-input.fl-editor__textarea {
+		resize: none;
+	}
+}
+
+/* Email preview: header lines, then the message rendered in an isolated frame */
+.fl-mail {
+	overflow: hidden;
+	border: 1px solid var(--line);
+	border-radius: var(--radius-md);
+	background: var(--surface);
+}
+.fl-mail__head {
+	display: grid;
+	gap: 4px;
+	margin: 0;
+	padding: 14px 16px;
+	border-bottom: 1px solid var(--line);
+	font-size: 13px;
+	line-height: 18px;
+}
+.fl-mail__head div {
+	display: grid;
+	grid-template-columns: 64px minmax(0, 1fr);
+	gap: 8px;
+}
+.fl-mail__head dt {
+	color: var(--text-subtle);
+	font-weight: 500;
+}
+.fl-mail__head dd {
+	margin: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.fl-mail__subject dd {
+	font-weight: 700;
+}
+.fl-mail__body {
+	background: #ffffff;
+}
+.fl-mail__body iframe {
+	display: block;
+	width: 100%;
+	border: 0;
+	background: #ffffff;
+}
+.fl-mail--compact .fl-mail__body {
+	position: relative;
+	max-height: 280px;
+	overflow: hidden;
+}
+.fl-mail--compact .fl-mail__body::after {
+	content: '';
+	position: absolute;
+	inset: auto 0 0;
+	height: 64px;
+	background: linear-gradient(to bottom, rgb(255 255 255 / 0), #ffffff);
+}
+.fl-mail--compact iframe {
+	pointer-events: none;
+}
+
+/* Clickable email preview in the Emails tab, opens the editor */
+.fl-emailcard {
+	position: relative;
+	display: block;
+	width: 100%;
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-md);
+	background: none;
+	font: inherit;
+	color: inherit;
+	text-align: left;
+	cursor: pointer;
+	transition: box-shadow var(--fl-fast) var(--fl-ease);
+}
+.fl-emailcard:hover,
+.fl-emailcard:focus-visible {
+	box-shadow: 0 0 0 3px var(--accent-tint);
+}
+.fl-emailcard__cta {
+	position: absolute;
+	right: 14px;
+	bottom: 14px;
+	z-index: 1;
+}
+
 /* Compact pill select, to sit next to the range filter */
 select.fl-input.fl-input--pill {
 	width: auto;
