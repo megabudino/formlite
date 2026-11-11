@@ -470,6 +470,59 @@ select.fl-input {
 	background: transparent;
 }
 
+/* Settings tab: section list on the left (on top on small screens), one section at a time */
+.fl-settings__nav {
+	display: flex;
+	gap: 4px;
+	padding: 12px;
+	overflow-x: auto;
+	border-bottom: 1px solid var(--line);
+}
+.fl-settings__link {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	gap: 10px;
+	height: 38px;
+	padding: 0 12px;
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: none;
+	font: inherit;
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--text-muted);
+	text-align: left;
+	cursor: pointer;
+	transition: background-color var(--fl-fast) var(--fl-ease), color var(--fl-fast) var(--fl-ease);
+}
+.fl-settings__link:hover {
+	background: var(--surface-2);
+	color: var(--text);
+}
+.fl-settings__link[aria-current='page'] {
+	background: var(--surface-2);
+	color: var(--text);
+}
+@media (min-width: 1024px) {
+	.fl-settings {
+		display: flex;
+	}
+	.fl-settings__nav {
+		flex: none;
+		flex-direction: column;
+		width: 210px;
+		padding: 24px 12px;
+		overflow: visible;
+		border-bottom: 0;
+		border-right: 1px solid var(--line);
+	}
+	.fl-settings > .fl-scrollcard__body {
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+}
+
 /* Form page. On desktop every tab fills the window exactly: the page never scrolls.
    Lists scroll in their own panes; longer tabs (integration, settings) scroll inside their card. */
 .fl-formpage {
@@ -1021,9 +1074,13 @@ select.fl-input.fl-input--pill {
 	border-bottom: 0;
 	padding-bottom: 0;
 }
-@media (min-width: 860px) {
+/* Two columns once the panel (not the window) is wide enough: the settings sidebar takes room */
+.fl-scrollcard__body {
+	container-type: inline-size;
+}
+@container (min-width: 760px) {
 	.fl-setting {
-		grid-template-columns: 280px 1fr;
+		grid-template-columns: 240px 1fr;
 		gap: 40px;
 	}
 }

@@ -50,7 +50,7 @@ A self-hosted Formspree alternative - multi-tenant form backend with email notif
 
 ### Notification email and auto-reply
 
-In a form's **Emails** tab you can change the notification email, and turn on an **auto-reply** sent to whoever fills in the form (for example, the download link of a lead magnet). The auto-reply goes to the address in the `reply_to` or `email` field. Each email shows a live preview; click it to open the editor.
+In a form's **Settings → Emails** you can change the notification email, and turn on an **auto-reply** sent to whoever fills in the form (for example, the download link of a lead magnet). The auto-reply goes to the address in the `reply_to` or `email` field. Each email shows a live preview; click it to open the editor.
 
 Emails can be written as plain text or HTML, with placeholders:
 
@@ -63,7 +63,7 @@ To limit abuse (someone entering another person's address), values typed by visi
 
 Each submission shows what happened to its auto-reply: sent, failed, skipped because of the daily limit, or not sent because there was no email address.
 
-When you turn the auto-reply on for a form that already has submissions, the Emails tab offers to **send it to past submissions** from the last 24 hours, 7 days or 30 days. Each address gets it once, from its latest submission; addresses that already received it are skipped. Up to 500 emails per run, sent one at a time.
+When you turn the auto-reply on for a form that already has submissions, Settings → Emails offers to **send it to past submissions** from the last 24 hours, 7 days or 30 days. Each address gets it once, from its latest submission; addresses that already received it are skipped. Up to 500 emails per run, sent one at a time.
 
 ### Rate limiting behind a reverse proxy
 
