@@ -7,9 +7,25 @@
 	import IntegrationGuide from '$lib/ui/IntegrationGuide.svelte';
 	import Inbox from '$lib/ui/Inbox.svelte';
 	import WorkspaceShell from '$lib/ui/WorkspaceShell.svelte';
+	import EmailTemplateDialog from '$lib/ui/EmailTemplateDialog.svelte';
+	import EmailPreview from '$lib/ui/EmailPreview.svelte';
+	import {
+		renderEmail,
+		DEFAULT_NOTIFY_SUBJECT,
+		DEFAULT_NOTIFY_BODY,
+		SAMPLE_AUTOREPLY_SUBJECT,
+		SAMPLE_AUTOREPLY_BODY,
+		type EmailDraft
+	} from '$lib/email-template';
 	import { parseUtc } from '$lib/stats';
 
-	type FormActionData = ActionData & { allowedDomainError?: string };
+	type FormActionData = ActionData & {
+		allowedDomainError?: string;
+		notifyError?: string;
+		autoreplyError?: string;
+		backfillError?: string;
+		backfillQueued?: number;
+	};
 
 	type BlockedRequest = {
 		id: number;
@@ -33,6 +49,7 @@
 	};
 
 	type TabId = 'submissions' | 'spam' | 'integration' | 'settings';
+	type SettingsSection = 'general' | 'emails' | 'domains' | 'webhooks';
 
 	let { data, form }: { data: FormPageData; form: FormActionData } = $props();
 
@@ -45,11 +62,22 @@
 		const params = $page.url.searchParams;
 		const tab = params.get('tab');
 		if (tab === 'submissions' || tab === 'spam' || tab === 'integration' || tab === 'settings') return tab;
+		if (tab === 'emails' || params.has('section')) return 'settings';
 		if (params.has('spam_page')) return 'spam';
 		return data.pagination.totalSubmissions > 0 ? 'submissions' : 'integration';
 	}
 
+	function initialSection(): SettingsSection {
+		const params = $page.url.searchParams;
+		const section = params.get('section');
+		if (section === 'general' || section === 'emails' || section === 'domains' || section === 'webhooks') {
+			return section;
+		}
+		return params.get('tab') === 'emails' ? 'emails' : 'general';
+	}
+
 	let activeTab = $state<TabId>(initialTab());
+	let settingsSection = $state<SettingsSection>(initialSection());
 	let firstArrived = $state(false);
 	let redirectUrl = $state(data.form.redirectUrl ?? '');
 	let redirectSaving = $state(false);
@@ -63,10 +91,88 @@
 	let newWebhookUrl = $state('');
 	let webhookSaving = $state(false);
 	let revealedSecrets = $state<Set<string>>(new Set());
+	let notifyDialogOpen = $state(false);
+	let autoreplyDialogOpen = $state(false);
+	// Set when the switch is flipped on before the auto-reply was written
+	let autoreplyEnableOnSave = $state(false);
+	let autoreplyToggling = $state(false);
+	let backfillDialog: HTMLDialogElement | undefined = $state();
+	let backfillDays = $state(7);
+	let backfillSending = $state(false);
+	let backfillError = $state('');
+	let backfillQueued = $state<number | null>(null);
 	let showDeleteConfirm = $state(false);
 	let deleteConfirmName = $state('');
 
 	const actionUrl = $derived(`${$page.url.origin}/s/${data.form.id}`);
+
+	const emails = $derived(data.emails);
+	const notifyCustomized = $derived(emails.notifySubject !== '' || emails.notifyBody !== '');
+	const autoreplyWritten = $derived(emails.autoreplySubject !== '' && emails.autoreplyBody !== '');
+	const fromAddress = $derived(emails.fromAddress || 'noreply@your-domain.com');
+
+	// Previews use the latest submission, or sample values when there is none yet
+	const previewIsSample = $derived(data.submissions.length === 0);
+	const previewData = $derived(
+		data.submissions[0]?.data ?? { name: 'Jane', email: 'jane@example.com', message: 'Hello!' }
+	);
+	const previewFields = $derived(emails.fieldNames.length > 0 ? emails.fieldNames : ['name', 'email', 'message']);
+	const visitorAddress = $derived(
+		[previewData.reply_to, previewData.email].find((v): v is string => typeof v === 'string' && v.includes('@')) ??
+			'jane@example.com'
+	);
+	const previewContext = $derived({
+		data: previewData,
+		formName: data.form.name,
+		submittedAt: new Date().toISOString()
+	});
+
+	const notifyDraft = $derived<EmailDraft>({
+		subject: emails.notifySubject || DEFAULT_NOTIFY_SUBJECT,
+		body: emails.notifyBody || DEFAULT_NOTIFY_BODY,
+		format: emails.notifyFormat,
+		fromName: '',
+		replyTo: ''
+	});
+	const autoreplyDraft = $derived<EmailDraft>({
+		subject: emails.autoreplySubject || SAMPLE_AUTOREPLY_SUBJECT,
+		body: emails.autoreplyBody || SAMPLE_AUTOREPLY_BODY,
+		format: emails.autoreplyFormat,
+		fromName: emails.autoreplyFromName,
+		replyTo: emails.autoreplyReplyTo
+	});
+
+	const notifyPreview = $derived(renderEmail(notifyDraft, previewContext));
+	const autoreplyPreview = $derived(renderEmail(autoreplyDraft, previewContext, { clampValues: true }));
+
+	// The page is reused when moving between forms: don't carry an open editor over
+	let emailsFormId = data.form.id;
+	$effect(() => {
+		if (data.form.id === emailsFormId) return;
+		emailsFormId = data.form.id;
+		notifyDialogOpen = false;
+		autoreplyDialogOpen = false;
+		backfillQueued = null;
+	});
+
+	const backfillTotal = $derived(Math.max(0, ...emails.backfill.map((option) => option.count)));
+	const backfillCount = $derived(emails.backfill.find((option) => option.days === backfillDays)?.count ?? 0);
+
+	function openBackfill() {
+		// Start on the narrowest window that reaches someone
+		backfillDays = emails.backfill.find((option) => option.count > 0)?.days ?? 7;
+		backfillError = '';
+		backfillDialog?.showModal();
+	}
+
+	function windowLabel(days: number) {
+		return days === 1 ? 'Last 24 hours' : `Last ${days} days`;
+	}
+
+	function openAutoreplyEditor(enableOnSave: boolean) {
+		autoreplyEnableOnSave = enableOnSave;
+		autoreplyDialogOpen = true;
+	}
 
 	// While waiting for the first submission, check every few seconds so the page
 	// flips to the submissions by itself the moment one lands.
@@ -117,8 +223,22 @@
 		// Start from the address bar, not $page.url, which can still point at the previous form mid-navigation.
 		const url = new URL(location.href);
 		url.searchParams.set('tab', id);
+		if (id === 'settings') url.searchParams.set('section', settingsSection);
+		else url.searchParams.delete('section');
 		history.replaceState(history.state, '', url);
 	}
+
+	function selectSection(id: SettingsSection) {
+		settingsSection = id;
+		selectTab('settings');
+	}
+
+	const settingsSections = [
+		{ id: 'general', label: 'General', icon: 'settings' },
+		{ id: 'emails', label: 'Emails', icon: 'mail' },
+		{ id: 'domains', label: 'Allowed domains', icon: 'globe' },
+		{ id: 'webhooks', label: 'Webhooks', icon: 'webhook' }
+	] as const;
 
 	const tabs = [
 		{ id: 'submissions', label: 'Submissions', icon: 'inbox' },
@@ -325,359 +445,615 @@
 					</div>
 				</section>
 			{:else if activeTab === 'settings'}
-				<section class="fl-card fl-scrollcard">
+				<section class="fl-card fl-scrollcard fl-settings">
+					<nav class="fl-settings__nav" aria-label="Settings sections">
+						{#each settingsSections as section (section.id)}
+							<button
+								type="button"
+								class="fl-settings__link"
+								aria-current={settingsSection === section.id ? 'page' : undefined}
+								onclick={() => selectSection(section.id)}
+							>
+								<Icon name={section.icon} size={16} />
+								{section.label}
+							</button>
+						{/each}
+					</nav>
 					<div class="fl-scrollcard__body">
-						<div class="mx-auto max-w-[960px]">
-							<!-- Redirect -->
-							<div class="fl-setting">
-								<div>
-									<h2 class="fl-h3">Redirect after submit</h2>
-									<p class="fl-muted mt-1 text-sm">
-										Where people land after sending the form. Leave empty for the built-in thank-you page.
-									</p>
-								</div>
-								<form
-									method="POST"
-									action="?/updateRedirectUrl"
-									use:enhance={() => {
-										redirectSaving = true;
-										redirectSaved = false;
-										return async ({ update, result }) => {
-											redirectSaving = false;
-											if (result.type === 'success') {
-												redirectSaved = true;
-												setTimeout(() => {
-													redirectSaved = false;
-												}, 3000);
-											}
-											await update({ reset: false });
-										};
-									}}
-									class="fl-field"
-								>
-									<label for="redirect_url" class="fl-label">Redirect URL</label>
-									<div class="flex flex-col gap-2 sm:flex-row">
-										<input
-											type="url"
-											id="redirect_url"
-											name="redirect_url"
-											bind:value={redirectUrl}
-											placeholder="https://example.com/thank-you"
-											class="fl-input fl-input--mono sm:flex-1"
-											class:fl-input--error={form?.redirectUrlError}
-										/>
-										<button type="submit" disabled={redirectSaving} class="fl-btn fl-btn--secondary">
-											{#if redirectSaving}
-												Saving…
-											{:else if redirectSaved}
-												<Icon name="check" size={16} /> Saved
-											{:else}
-												Save
-											{/if}
-										</button>
-									</div>
-									{#if form?.redirectUrlError}
-										<span class="fl-error"><Icon name="alert" size={14} />{form.redirectUrlError}</span>
-									{/if}
-								</form>
-							</div>
-
-							<!-- Emails -->
-							<div class="fl-setting">
-								<div>
-									<h2 class="fl-h3">Email notifications</h2>
-									<p class="fl-muted mt-1 text-sm">Every submission is sent to these addresses.</p>
-								</div>
-								<div class="grid gap-3">
-									<div class="flex flex-wrap gap-2">
-										{#each data.form.targetEmails as email (email)}
-											<span class="fl-chip">
-												<Icon name="mail" size={14} class="text-fg-subtle" />
-												<span class="break-all">{email}</span>
-												{#if data.form.targetEmails.length > 1}
-													<form method="POST" action="?/removeEmail" use:enhance class="contents">
-														<input type="hidden" name="email" value={email} />
-														<button type="submit" class="fl-chip__x" aria-label="Remove {email}">
-															<Icon name="x" size={12} />
-														</button>
-													</form>
-												{:else}
-													<span class="w-1.5"></span>
-												{/if}
-											</span>
-										{/each}
+						<div class="mx-auto max-w-[880px]">
+							{#if settingsSection === 'general'}
+								<!-- Redirect -->
+								<div class="fl-setting">
+									<div>
+										<h2 class="fl-h3">Redirect after submit</h2>
+										<p class="fl-muted mt-1 text-sm">
+											Where people land after sending the form. Leave empty for the built-in thank-you page.
+										</p>
 									</div>
 									<form
 										method="POST"
-										action="?/addEmail"
+										action="?/updateRedirectUrl"
 										use:enhance={() => {
-											emailSaving = true;
+											redirectSaving = true;
+											redirectSaved = false;
 											return async ({ update, result }) => {
-												emailSaving = false;
+												redirectSaving = false;
 												if (result.type === 'success') {
-													newEmail = '';
+													redirectSaved = true;
+													setTimeout(() => {
+														redirectSaved = false;
+													}, 3000);
 												}
-												await update();
+												await update({ reset: false });
 											};
 										}}
 										class="fl-field"
 									>
-										<label for="new_email" class="sr-only">Add an email address</label>
-										<div class="flex flex-col gap-2 sm:flex-row">
-											<input
-												type="email"
-												id="new_email"
-												name="new_email"
-												bind:value={newEmail}
-												placeholder="team@example.com"
-												class="fl-input sm:flex-1"
-												class:fl-input--error={form?.emailError}
-											/>
-											<button
-												type="submit"
-												disabled={emailSaving || !newEmail.trim()}
-												class="fl-btn fl-btn--secondary"
-											>
-												<Icon name="plus" size={16} />
-												{emailSaving ? 'Adding…' : 'Add email'}
-											</button>
-										</div>
-										{#if form?.emailError}
-											<span class="fl-error"><Icon name="alert" size={14} />{form.emailError}</span>
-										{/if}
-									</form>
-								</div>
-							</div>
-
-							<!-- Domains -->
-							<div class="fl-setting">
-								<div>
-									<h2 class="fl-h3">Allowed domains</h2>
-									<p class="fl-muted mt-1 text-sm">
-										Only accept submissions from these sites. Leave empty to accept from anywhere.
-									</p>
-								</div>
-								<div class="grid gap-3">
-									{#if data.form.allowedDomains.length > 0}
-										<div class="flex flex-wrap gap-2">
-											{#each data.form.allowedDomains as domain (domain)}
-												<span class="fl-chip fl-chip--mono">
-													<Icon name="globe" size={14} class="text-fg-subtle" />
-													<span class="break-all">{domain}</span>
-													<form method="POST" action="?/removeAllowedDomain" use:enhance class="contents">
-														<input type="hidden" name="domain" value={domain} />
-														<button type="submit" class="fl-chip__x" aria-label="Remove {domain}">
-															<Icon name="x" size={12} />
-														</button>
-													</form>
-												</span>
-											{/each}
-										</div>
-									{:else}
-										<p class="m-0 text-sm text-fg-subtle">All origins are accepted.</p>
-									{/if}
-									<form
-										method="POST"
-										action="?/addAllowedDomain"
-										use:enhance={() => {
-											domainSaving = true;
-											return async ({ update, result }) => {
-												domainSaving = false;
-												if (result.type === 'success') {
-													newDomain = '';
-												}
-												await update();
-											};
-										}}
-										class="fl-field"
-									>
-										<label for="new_domain" class="sr-only">Add a domain or origin</label>
-										<div class="flex flex-col gap-2 sm:flex-row">
-											<input
-												type="text"
-												id="new_domain"
-												name="new_domain"
-												bind:value={newDomain}
-												placeholder="example.com"
-												class="fl-input fl-input--mono sm:flex-1"
-												class:fl-input--error={form?.allowedDomainError}
-											/>
-											<button
-												type="submit"
-												disabled={domainSaving || !newDomain.trim()}
-												class="fl-btn fl-btn--secondary"
-											>
-												<Icon name="plus" size={16} />
-												{domainSaving ? 'Adding…' : 'Add domain'}
-											</button>
-										</div>
-										{#if form?.allowedDomainError}
-											<span class="fl-error"><Icon name="alert" size={14} />{form.allowedDomainError}</span>
-										{:else}
-											<span class="fl-help">
-												Use <code class="fl-code">example.com</code>,
-												<code class="fl-code">https://example.com</code> or
-												<code class="fl-code">*.example.com</code>. A domain also covers its www. variant;
-												wildcards match subdomains only.
-											</span>
-										{/if}
-									</form>
-								</div>
-							</div>
-
-							<!-- Webhooks -->
-							<div class="fl-setting">
-								<div>
-									<h2 class="fl-h3">Webhooks</h2>
-									<p class="fl-muted mt-1 text-sm">
-										We POST each submission as JSON to these URLs, signed with the secret.
-									</p>
-								</div>
-								<div class="grid gap-3">
-									{#if data.webhooks.length > 0}
-										<div class="grid gap-2">
-											{#each data.webhooks as webhook (webhook.id)}
-												{@const revealed = revealedSecrets.has(webhook.id)}
-												<div class="flex items-start gap-3 rounded-md bg-surface-2 p-4">
-													<span
-														class="grid h-9 w-9 flex-none place-items-center rounded-sm bg-surface text-fg-muted"
-														><Icon name="webhook" size={16} /></span
-													>
-													<div class="min-w-0 flex-1">
-														<div class="break-all font-mono text-[13px] font-medium">{webhook.url}</div>
-														<div class="mt-2 flex flex-wrap items-center gap-2">
-															<span class="text-xs font-semibold text-fg-muted">Secret</span>
-															<code class="fl-code break-all !bg-surface !text-xs">
-																{revealed ? webhook.secret : '••••••••••••••••'}
-															</code>
-															<button
-																type="button"
-																class="fl-btn fl-btn--ghost fl-btn--sm !h-7 !px-2.5 !text-xs"
-																onclick={() => (revealedSecrets = toggleInSet(revealedSecrets, webhook.id))}
-															>
-																<Icon name={revealed ? 'eye-off' : 'eye'} size={14} />
-																{revealed ? 'Hide' : 'Reveal'}
-															</button>
-														</div>
-													</div>
-													<form method="POST" action="?/deleteWebhook" use:enhance class="flex-none">
-														<input type="hidden" name="webhook_id" value={webhook.id} />
-														<button
-															type="submit"
-															class="fl-btn fl-btn--ghost fl-btn--sm fl-btn--icon !w-9 hover:!bg-danger-tint hover:!text-on-danger-tint"
-															aria-label="Delete webhook {webhook.url}"
-															title="Delete webhook"
-														>
-															<Icon name="trash" size={16} />
-														</button>
-													</form>
-												</div>
-											{/each}
-										</div>
-									{:else}
-										<p class="m-0 text-sm text-fg-subtle">No webhooks yet.</p>
-									{/if}
-									<form
-										method="POST"
-										action="?/addWebhook"
-										use:enhance={() => {
-											webhookSaving = true;
-											return async ({ update, result }) => {
-												webhookSaving = false;
-												if (result.type === 'success') {
-													newWebhookUrl = '';
-												}
-												await update();
-											};
-										}}
-										class="fl-field"
-									>
-										<label for="webhook_url" class="sr-only">Webhook URL</label>
+										<label for="redirect_url" class="fl-label">Redirect URL</label>
 										<div class="flex flex-col gap-2 sm:flex-row">
 											<input
 												type="url"
-												id="webhook_url"
-												name="webhook_url"
-												bind:value={newWebhookUrl}
-												placeholder="https://example.com/webhook"
+												id="redirect_url"
+												name="redirect_url"
+												bind:value={redirectUrl}
+												placeholder="https://example.com/thank-you"
 												class="fl-input fl-input--mono sm:flex-1"
-												class:fl-input--error={form?.webhookError}
+												class:fl-input--error={form?.redirectUrlError}
 											/>
-											<button
-												type="submit"
-												disabled={webhookSaving || !newWebhookUrl.trim()}
-												class="fl-btn fl-btn--secondary"
-											>
-												<Icon name="plus" size={16} />
-												{webhookSaving ? 'Adding…' : 'Add webhook'}
+											<button type="submit" disabled={redirectSaving} class="fl-btn fl-btn--secondary">
+												{#if redirectSaving}
+													Saving…
+												{:else if redirectSaved}
+													<Icon name="check" size={16} /> Saved
+												{:else}
+													Save
+												{/if}
 											</button>
 										</div>
-										{#if form?.webhookError}
-											<span class="fl-error"><Icon name="alert" size={14} />{form.webhookError}</span>
+										{#if form?.redirectUrlError}
+											<span class="fl-error"><Icon name="alert" size={14} />{form.redirectUrlError}</span>
 										{/if}
 									</form>
 								</div>
-							</div>
 
-							<!-- Danger zone -->
-							<div class="fl-setting">
-								<div>
-									<h2 class="fl-h3 text-danger">Delete this form</h2>
-									<p class="fl-muted mt-1 text-sm">
-										Removes the form, every submission and its webhooks. This can't be undone.
-									</p>
-								</div>
-								<div>
-									{#if !showDeleteConfirm}
-										<button
-											type="button"
-											onclick={() => (showDeleteConfirm = true)}
-											class="fl-btn fl-btn--danger-soft"
-										>
-											<Icon name="trash" size={16} />
-											Delete form
-										</button>
-									{:else}
-										<div class="grid gap-4 rounded-md bg-danger-tint p-4 text-on-danger-tint">
-											<p class="m-0 text-sm">
-												<strong>This deletes {data.form.name} for good.</strong>
-												Type its name to confirm.
-											</p>
-											<input
-												type="text"
-												bind:value={deleteConfirmName}
-												placeholder={data.form.name}
-												aria-label="Type the form name to confirm"
-												class="fl-input"
-											/>
-											<div class="flex flex-wrap gap-2">
-												<form method="POST" action="?/deleteForm" use:enhance>
+								<!-- Danger zone -->
+								<div class="fl-setting">
+									<div>
+										<h2 class="fl-h3 text-danger">Delete this form</h2>
+										<p class="fl-muted mt-1 text-sm">
+											Removes the form, every submission and its webhooks. This can't be undone.
+										</p>
+									</div>
+									<div>
+										{#if !showDeleteConfirm}
+											<button
+												type="button"
+												onclick={() => (showDeleteConfirm = true)}
+												class="fl-btn fl-btn--danger-soft"
+											>
+												<Icon name="trash" size={16} />
+												Delete form
+											</button>
+										{:else}
+											<div class="grid gap-4 rounded-md bg-danger-tint p-4 text-on-danger-tint">
+												<p class="m-0 text-sm">
+													<strong>This deletes {data.form.name} for good.</strong>
+													Type its name to confirm.
+												</p>
+												<input
+													type="text"
+													bind:value={deleteConfirmName}
+													placeholder={data.form.name}
+													aria-label="Type the form name to confirm"
+													class="fl-input"
+												/>
+												<div class="flex flex-wrap gap-2">
+													<form method="POST" action="?/deleteForm" use:enhance>
+														<button
+															type="submit"
+															disabled={deleteConfirmName !== data.form.name}
+															class="fl-btn fl-btn--danger"
+														>
+															Delete forever
+														</button>
+													</form>
 													<button
-														type="submit"
-														disabled={deleteConfirmName !== data.form.name}
-														class="fl-btn fl-btn--danger"
+														type="button"
+														onclick={() => {
+															showDeleteConfirm = false;
+															deleteConfirmName = '';
+														}}
+														class="fl-btn fl-btn--secondary"
 													>
-														Delete forever
+														Cancel
 													</button>
-												</form>
+												</div>
+											</div>
+										{/if}
+									</div>
+								</div>
+							{:else if settingsSection === 'emails'}
+								<!-- Notification -->
+								<div class="fl-setting">
+									<div>
+										<h2 class="fl-h3">Notification</h2>
+										<p class="fl-muted mt-1 text-sm">
+											Sent to you and your team for every submission. Hit reply to answer the person who
+											filled in the form.
+										</p>
+									</div>
+									<div class="grid gap-5">
+										<div class="grid gap-3">
+											<span class="fl-label">Recipients</span>
+										<div class="flex flex-wrap gap-2">
+											{#each data.form.targetEmails as email (email)}
+												<span class="fl-chip">
+													<Icon name="mail" size={14} class="text-fg-subtle" />
+													<span class="break-all">{email}</span>
+													{#if data.form.targetEmails.length > 1}
+														<form method="POST" action="?/removeEmail" use:enhance class="contents">
+															<input type="hidden" name="email" value={email} />
+															<button type="submit" class="fl-chip__x" aria-label="Remove {email}">
+																<Icon name="x" size={12} />
+															</button>
+														</form>
+													{:else}
+														<span class="w-1.5"></span>
+													{/if}
+												</span>
+											{/each}
+										</div>
+										<form
+											method="POST"
+											action="?/addEmail"
+											use:enhance={() => {
+												emailSaving = true;
+												return async ({ update, result }) => {
+													emailSaving = false;
+													if (result.type === 'success') {
+														newEmail = '';
+													}
+													await update();
+												};
+											}}
+											class="fl-field"
+										>
+											<label for="new_email" class="sr-only">Add an email address</label>
+											<div class="flex flex-col gap-2 sm:flex-row">
+												<input
+													type="email"
+													id="new_email"
+													name="new_email"
+													bind:value={newEmail}
+													placeholder="team@example.com"
+													class="fl-input sm:flex-1"
+													class:fl-input--error={form?.emailError}
+												/>
 												<button
-													type="button"
-													onclick={() => {
-														showDeleteConfirm = false;
-														deleteConfirmName = '';
-													}}
+													type="submit"
+													disabled={emailSaving || !newEmail.trim()}
 													class="fl-btn fl-btn--secondary"
 												>
-													Cancel
+													<Icon name="plus" size={16} />
+													{emailSaving ? 'Adding…' : 'Add email'}
 												</button>
 											</div>
+											{#if form?.emailError}
+												<span class="fl-error"><Icon name="alert" size={14} />{form.emailError}</span>
+											{/if}
+										</form>
 										</div>
-									{/if}
+										<div class="grid gap-3">
+											<div class="flex items-center gap-2">
+												<span class="fl-label">Email</span>
+												<span class="fl-badge fl-badge--plain">{notifyCustomized ? 'Custom' : 'Default'}</span>
+											</div>
+											{@render emailCard(
+												notifyPreview.subject,
+												notifyPreview.html,
+												fromAddress,
+												data.form.targetEmails.join(', '),
+												visitorAddress,
+												() => (notifyDialogOpen = true)
+											)}
+										</div>
+									</div>
 								</div>
-							</div>
+
+								<!-- Auto-reply -->
+								<div class="fl-setting">
+									<div>
+										<h2 class="fl-h3">Auto-reply</h2>
+										<p class="fl-muted mt-1 text-sm">
+											Sent to whoever fills in the form, at the address in the <code class="fl-code">email</code>
+											field. Great for delivering a lead magnet.
+										</p>
+									</div>
+									<div class="grid gap-5">
+										<form
+											method="POST"
+											action="?/toggleAutoreply"
+											use:enhance={() => {
+												autoreplyToggling = true;
+												return async ({ update }) => {
+													autoreplyToggling = false;
+													await update({ reset: false });
+												};
+											}}
+											class="m-0"
+										>
+											<input type="hidden" name="enabled" value={emails.autoreplyEnabled ? '0' : '1'} />
+											<label class="fl-switch">
+												<input
+													type="checkbox"
+													checked={emails.autoreplyEnabled}
+													disabled={autoreplyToggling}
+													onchange={(e) => {
+														// Nothing written yet: open the editor, the switch turns on when it's saved
+														if (e.currentTarget.checked && !autoreplyWritten) {
+															e.currentTarget.checked = false;
+															openAutoreplyEditor(true);
+															return;
+														}
+														e.currentTarget.form?.requestSubmit();
+													}}
+												/>
+												{emails.autoreplyEnabled ? 'Auto-reply is on' : 'Auto-reply is off'}
+											</label>
+										</form>
+										{#if form?.autoreplyError}
+											<span class="fl-error"><Icon name="alert" size={14} />{form.autoreplyError}</span>
+										{/if}
+
+										{#if autoreplyWritten}
+											<div class:opacity-60={!emails.autoreplyEnabled}>
+												{@render emailCard(
+													autoreplyPreview.subject,
+													autoreplyPreview.html,
+													emails.autoreplyFromName ? `${emails.autoreplyFromName} <${fromAddress}>` : fromAddress,
+													visitorAddress,
+													emails.autoreplyReplyTo,
+													() => openAutoreplyEditor(false)
+												)}
+											</div>
+										{:else}
+											<div class="grid place-items-center rounded-md bg-surface-2 px-6 py-10 text-center">
+												<span class="fl-card__tile"><Icon name="mail" /></span>
+												<p class="mt-3 font-semibold">No auto-reply yet</p>
+												<p class="fl-muted mt-1 max-w-xs text-sm">
+													Thank people for signing up and send them the link to your download.
+												</p>
+												<button
+													type="button"
+													class="fl-btn fl-btn--secondary fl-btn--sm mt-5"
+													onclick={() => openAutoreplyEditor(false)}
+												>
+													<Icon name="plus" size={16} />
+													Write auto-reply
+												</button>
+											</div>
+										{/if}
+										{#if backfillQueued !== null}
+											<div class="fl-alert fl-alert--success" role="status">
+												<Icon name="check-circle" size={20} class="fl-alert__icon" />
+												<div>
+													<strong>Sending the auto-reply to {backfillQueued} {backfillQueued === 1 ? 'person' : 'people'}.</strong>
+													Each submission shows when it's been sent.
+												</div>
+											</div>
+										{:else if emails.autoreplyEnabled && backfillTotal > 0}
+											<div class="flex flex-wrap items-center justify-between gap-3 rounded-md bg-surface-2 p-4">
+												<p class="m-0 text-sm">
+													<strong>Some people filled in the form before the auto-reply was on.</strong>
+													<span class="fl-muted">You can send it to them now.</span>
+												</p>
+												<button type="button" class="fl-btn fl-btn--secondary fl-btn--sm" onclick={openBackfill}>
+													<Icon name="mail" size={16} />
+													Send to past submissions
+												</button>
+											</div>
+										{/if}
+									</div>
+								</div>
+							{:else if settingsSection === 'domains'}
+								<!-- Domains -->
+								<div class="fl-setting">
+									<div>
+										<h2 class="fl-h3">Allowed domains</h2>
+										<p class="fl-muted mt-1 text-sm">
+											Only accept submissions from these sites. Leave empty to accept from anywhere.
+										</p>
+									</div>
+									<div class="grid gap-3">
+										{#if data.form.allowedDomains.length > 0}
+											<div class="flex flex-wrap gap-2">
+												{#each data.form.allowedDomains as domain (domain)}
+													<span class="fl-chip fl-chip--mono">
+														<Icon name="globe" size={14} class="text-fg-subtle" />
+														<span class="break-all">{domain}</span>
+														<form method="POST" action="?/removeAllowedDomain" use:enhance class="contents">
+															<input type="hidden" name="domain" value={domain} />
+															<button type="submit" class="fl-chip__x" aria-label="Remove {domain}">
+																<Icon name="x" size={12} />
+															</button>
+														</form>
+													</span>
+												{/each}
+											</div>
+										{:else}
+											<p class="m-0 text-sm text-fg-subtle">All origins are accepted.</p>
+										{/if}
+										<form
+											method="POST"
+											action="?/addAllowedDomain"
+											use:enhance={() => {
+												domainSaving = true;
+												return async ({ update, result }) => {
+													domainSaving = false;
+													if (result.type === 'success') {
+														newDomain = '';
+													}
+													await update();
+												};
+											}}
+											class="fl-field"
+										>
+											<label for="new_domain" class="sr-only">Add a domain or origin</label>
+											<div class="flex flex-col gap-2 sm:flex-row">
+												<input
+													type="text"
+													id="new_domain"
+													name="new_domain"
+													bind:value={newDomain}
+													placeholder="example.com"
+													class="fl-input fl-input--mono sm:flex-1"
+													class:fl-input--error={form?.allowedDomainError}
+												/>
+												<button
+													type="submit"
+													disabled={domainSaving || !newDomain.trim()}
+													class="fl-btn fl-btn--secondary"
+												>
+													<Icon name="plus" size={16} />
+													{domainSaving ? 'Adding…' : 'Add domain'}
+												</button>
+											</div>
+											{#if form?.allowedDomainError}
+												<span class="fl-error"><Icon name="alert" size={14} />{form.allowedDomainError}</span>
+											{:else}
+												<span class="fl-help">
+													Use <code class="fl-code">example.com</code>,
+													<code class="fl-code">https://example.com</code> or
+													<code class="fl-code">*.example.com</code>. A domain also covers its www. variant;
+													wildcards match subdomains only.
+												</span>
+											{/if}
+										</form>
+									</div>
+								</div>
+
+							{:else if settingsSection === 'webhooks'}
+								<!-- Webhooks -->
+								<div class="fl-setting">
+									<div>
+										<h2 class="fl-h3">Webhooks</h2>
+										<p class="fl-muted mt-1 text-sm">
+											We POST each submission as JSON to these URLs, signed with the secret.
+										</p>
+									</div>
+									<div class="grid gap-3">
+										{#if data.webhooks.length > 0}
+											<div class="grid gap-2">
+												{#each data.webhooks as webhook (webhook.id)}
+													{@const revealed = revealedSecrets.has(webhook.id)}
+													<div class="flex items-start gap-3 rounded-md bg-surface-2 p-4">
+														<span
+															class="grid h-9 w-9 flex-none place-items-center rounded-sm bg-surface text-fg-muted"
+															><Icon name="webhook" size={16} /></span
+														>
+														<div class="min-w-0 flex-1">
+															<div class="break-all font-mono text-[13px] font-medium">{webhook.url}</div>
+															<div class="mt-2 flex flex-wrap items-center gap-2">
+																<span class="text-xs font-semibold text-fg-muted">Secret</span>
+																<code class="fl-code break-all !bg-surface !text-xs">
+																	{revealed ? webhook.secret : '••••••••••••••••'}
+																</code>
+																<button
+																	type="button"
+																	class="fl-btn fl-btn--ghost fl-btn--sm !h-7 !px-2.5 !text-xs"
+																	onclick={() => (revealedSecrets = toggleInSet(revealedSecrets, webhook.id))}
+																>
+																	<Icon name={revealed ? 'eye-off' : 'eye'} size={14} />
+																	{revealed ? 'Hide' : 'Reveal'}
+																</button>
+															</div>
+														</div>
+														<form method="POST" action="?/deleteWebhook" use:enhance class="flex-none">
+															<input type="hidden" name="webhook_id" value={webhook.id} />
+															<button
+																type="submit"
+																class="fl-btn fl-btn--ghost fl-btn--sm fl-btn--icon !w-9 hover:!bg-danger-tint hover:!text-on-danger-tint"
+																aria-label="Delete webhook {webhook.url}"
+																title="Delete webhook"
+															>
+																<Icon name="trash" size={16} />
+															</button>
+														</form>
+													</div>
+												{/each}
+											</div>
+										{:else}
+											<p class="m-0 text-sm text-fg-subtle">No webhooks yet.</p>
+										{/if}
+										<form
+											method="POST"
+											action="?/addWebhook"
+											use:enhance={() => {
+												webhookSaving = true;
+												return async ({ update, result }) => {
+													webhookSaving = false;
+													if (result.type === 'success') {
+														newWebhookUrl = '';
+													}
+													await update();
+												};
+											}}
+											class="fl-field"
+										>
+											<label for="webhook_url" class="sr-only">Webhook URL</label>
+											<div class="flex flex-col gap-2 sm:flex-row">
+												<input
+													type="url"
+													id="webhook_url"
+													name="webhook_url"
+													bind:value={newWebhookUrl}
+													placeholder="https://example.com/webhook"
+													class="fl-input fl-input--mono sm:flex-1"
+													class:fl-input--error={form?.webhookError}
+												/>
+												<button
+													type="submit"
+													disabled={webhookSaving || !newWebhookUrl.trim()}
+													class="fl-btn fl-btn--secondary"
+												>
+													<Icon name="plus" size={16} />
+													{webhookSaving ? 'Adding…' : 'Add webhook'}
+												</button>
+											</div>
+											{#if form?.webhookError}
+												<span class="fl-error"><Icon name="alert" size={14} />{form.webhookError}</span>
+											{/if}
+										</form>
+									</div>
+								</div>
+
+							{/if}
 						</div>
 					</div>
 				</section>
+
+				<EmailTemplateDialog
+					bind:open={notifyDialogOpen}
+					title="Notification email"
+					description="What you receive for every submission."
+					action="?/updateNotificationEmail"
+					errorKey="notifyError"
+					initial={notifyDraft}
+					allowReset={notifyCustomized}
+					fieldNames={previewFields}
+					{previewData}
+					{previewIsSample}
+					formName={data.form.name}
+					{fromAddress}
+					previewTo={data.form.targetEmails.join(', ')}
+				/>
+				<EmailTemplateDialog
+					bind:open={autoreplyDialogOpen}
+					title="Auto-reply"
+					description="Sent to the person who fills in the form. Values they type are cut to one short line."
+					action="?/updateAutoreply"
+					errorKey="autoreplyError"
+					initial={autoreplyDraft}
+					withSender
+					enableOnSave={autoreplyEnableOnSave && !emails.autoreplyEnabled}
+					clampValues
+					fieldNames={previewFields}
+					{previewData}
+					{previewIsSample}
+					formName={data.form.name}
+					{fromAddress}
+					previewTo={visitorAddress}
+					defaultReplyTo={data.form.targetEmails[0] ?? ''}
+				/>
+
+				<dialog
+					bind:this={backfillDialog}
+					class="fl-dialog !w-[min(520px,calc(100vw-32px))]"
+					aria-labelledby="backfill-title"
+					onclick={(e) => {
+						if (e.target === backfillDialog) backfillDialog?.close();
+					}}
+				>
+					<form
+						method="POST"
+						action="?/sendAutoreplyToPast"
+						use:enhance={() => {
+							backfillSending = true;
+							backfillError = '';
+							return async ({ result, update }) => {
+								backfillSending = false;
+								if (result.type === 'success') {
+									backfillQueued = Number(result.data?.backfillQueued ?? 0);
+									backfillDialog?.close();
+									await update({ reset: false });
+								} else if (result.type === 'failure') {
+									backfillError = String(result.data?.backfillError ?? 'Could not send the auto-reply');
+								} else {
+									await update({ reset: false });
+								}
+							};
+						}}
+					>
+						<div class="fl-dialog__head">
+							<div>
+								<h2 id="backfill-title" class="fl-h3">Send to past submissions</h2>
+								<p class="fl-muted m-0 mt-1 text-sm">
+									Each person gets the auto-reply once, from their latest submission. People who already
+									received it are skipped.
+								</p>
+							</div>
+							<button
+								type="button"
+								class="fl-btn fl-btn--ghost fl-btn--sm fl-btn--icon !w-9"
+								aria-label="Close"
+								onclick={() => backfillDialog?.close()}
+							>
+								<Icon name="x" size={18} />
+							</button>
+						</div>
+						<div class="fl-dialog__body grid gap-4">
+							<fieldset class="m-0 grid gap-2 border-0 p-0">
+								<legend class="fl-label mb-2">Who filled in the form in the</legend>
+								{#each emails.backfill as option (option.days)}
+									<label
+										class="flex cursor-pointer items-center justify-between gap-3 rounded-md border border-line px-4 py-3 has-[:checked]:border-accent-text has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50"
+									>
+										<span class="flex items-center gap-3">
+											<input
+												type="radio"
+												name="days"
+												value={option.days}
+												bind:group={backfillDays}
+												disabled={option.count === 0}
+											/>
+											<span class="text-sm font-semibold">{windowLabel(option.days)}</span>
+										</span>
+										<span class="fl-muted text-sm">
+											{option.count === 0 ? 'Nobody new' : `${option.count} ${option.count === 1 ? 'person' : 'people'}`}
+										</span>
+									</label>
+								{/each}
+							</fieldset>
+							<p class="fl-help m-0">
+								An auto-reply that arrives days later can look odd: check the message still makes sense
+								before sending. Emails go out one at a time and can't be stopped once started.
+							</p>
+							{#if backfillError}
+								<span class="fl-error"><Icon name="alert" size={14} />{backfillError}</span>
+							{/if}
+						</div>
+						<div class="fl-dialog__foot">
+							<button type="button" class="fl-btn fl-btn--secondary" onclick={() => backfillDialog?.close()}>
+								Cancel
+							</button>
+							<button type="submit" disabled={backfillSending || backfillCount === 0} class="fl-btn fl-btn--primary">
+								{backfillSending
+									? 'Starting…'
+									: `Send ${backfillCount} ${backfillCount === 1 ? 'email' : 'emails'}`}
+							</button>
+						</div>
+					</form>
+				</dialog>
 			{/if}
 		</div>
 	</div>
@@ -685,6 +1061,23 @@
 </div>
 {/snippet}
 
+
+{#snippet emailCard(
+	subject: string,
+	html: string,
+	from: string,
+	to: string,
+	replyTo: string,
+	onopen: () => void
+)}
+	<button type="button" class="fl-emailcard" onclick={onopen} aria-label="Edit email: {subject}">
+		<EmailPreview {subject} {html} {from} {to} {replyTo} compact />
+		<span class="fl-btn fl-btn--primary fl-btn--sm fl-emailcard__cta">
+			<Icon name="settings" size={16} />
+			Edit email
+		</span>
+	</button>
+{/snippet}
 
 {#snippet pageNav(current: number, total: number, hasPrev: boolean, hasNext: boolean, param: string)}
 	<nav class="flex items-center justify-between gap-4 border-t border-line pt-5" aria-label="Pagination">

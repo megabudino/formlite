@@ -72,6 +72,15 @@ CREATE TABLE IF NOT EXISTS forms (
     target_emails TEXT NOT NULL DEFAULT '[]',
     allowed_domains TEXT NOT NULL DEFAULT '[]',
     is_active INTEGER NOT NULL DEFAULT 1,
+    notify_subject TEXT,
+    notify_body TEXT,
+    notify_format TEXT NOT NULL DEFAULT 'text',
+    autoreply_enabled INTEGER NOT NULL DEFAULT 0,
+    autoreply_subject TEXT,
+    autoreply_body TEXT,
+    autoreply_format TEXT NOT NULL DEFAULT 'text',
+    autoreply_from_name TEXT,
+    autoreply_reply_to TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE
 );
@@ -82,6 +91,9 @@ CREATE TABLE IF NOT EXISTS submissions (
     form_id TEXT NOT NULL,
     data TEXT NOT NULL DEFAULT '{}',
     meta TEXT NOT NULL DEFAULT '{}',
+    autoreply_status TEXT,
+    autoreply_at TEXT,
+    autoreply_error TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (form_id) REFERENCES forms(id) ON DELETE CASCADE
 );

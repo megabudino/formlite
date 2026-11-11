@@ -4,6 +4,25 @@ import db from '$lib/db';
 import { randomUUID, randomBytes } from 'crypto';
 import { getWorkspace, listWorkspaceForms } from '$lib/server/workspaces';
 import { normalizeAllowedDomain as normalizeDomainEntry } from '$lib/server/origin';
+import {
+	DEFAULT_NOTIFY_SUBJECT,
+	DEFAULT_NOTIFY_BODY,
+	MAX_SUBJECT_LENGTH,
+	MAX_BODY_LENGTH,
+	isBodyFormat,
+	type BodyFormat
+} from '$lib/email-template';
+import { env } from '$env/dynamic/private';
+import {
+	findBackfillTargets,
+	backfillCounts,
+	startBackfill,
+	autoreplyReady,
+	BACKFILL_WINDOWS_DAYS,
+	BACKFILL_MAX,
+	type AutoreplySettings,
+	type AutoreplyStatus
+} from '$lib/server/autoreply';
 
 interface Form {
 	id: string;
@@ -15,6 +34,15 @@ interface Form {
 	allowed_domains: string;
 	is_active: number;
 	created_at: string;
+	notify_subject: string | null;
+	notify_body: string | null;
+	notify_format: string;
+	autoreply_enabled: number;
+	autoreply_subject: string | null;
+	autoreply_body: string | null;
+	autoreply_format: string;
+	autoreply_from_name: string | null;
+	autoreply_reply_to: string | null;
 }
 
 interface Webhook {
@@ -30,6 +58,9 @@ interface Submission {
 	form_id: string;
 	data: string;
 	meta: string;
+	autoreply_status: AutoreplyStatus | null;
+	autoreply_at: string | null;
+	autoreply_error: string | null;
 	created_at: string;
 }
 
@@ -114,6 +145,25 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 
 	const workspace = form.workspace_id ? getWorkspace(user.id, form.workspace_id) : null;
 
+	// Field names from recent submissions, offered as {{placeholders}} in the email editors
+	const recentData = db
+		.prepare('SELECT data FROM submissions WHERE form_id = ? ORDER BY created_at DESC LIMIT 50')
+		.all(params.id) as { data: string }[];
+	const fieldNames = new Set<string>();
+	for (const row of recentData) {
+		try {
+			for (const [key, value] of Object.entries(JSON.parse(row.data) as Record<string, unknown>)) {
+				if (value && typeof value === 'object' && !Array.isArray(value)) {
+					for (const child of Object.keys(value)) fieldNames.add(`${key}.${child}`);
+				} else {
+					fieldNames.add(key);
+				}
+			}
+		} catch {
+			// Skip malformed rows
+		}
+	}
+
 	return {
 		navForms: workspace ? listWorkspaceForms(user.id, workspace.id) : [],
 		form: {
@@ -125,6 +175,22 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 			isActive: form.is_active === 1,
 			createdAt: form.created_at,
 			workspaceId: form.workspace_id
+		},
+		emails: {
+			notifySubject: form.notify_subject ?? '',
+			notifyBody: form.notify_body ?? '',
+			notifyFormat: (form.notify_body && form.notify_format === 'html' ? 'html' : 'text') as BodyFormat,
+			autoreplyEnabled: form.autoreply_enabled === 1,
+			autoreplySubject: form.autoreply_subject ?? '',
+			autoreplyBody: form.autoreply_body ?? '',
+			autoreplyFormat: (form.autoreply_format === 'html' ? 'html' : 'text') as BodyFormat,
+			autoreplyFromName: form.autoreply_from_name ?? '',
+			autoreplyReplyTo: form.autoreply_reply_to ?? '',
+			fieldNames: [...fieldNames].slice(0, 30),
+			// People who filled in the form before and haven't had the auto-reply, per time window
+			backfill: autoreplyReady(form) ? backfillCounts(form.id) : [],
+			// Address only, for the From line of the previews
+			fromAddress: (env.MAILGUN_FROM_EMAIL ?? '').match(/<([^>]+)>/)?.[1] ?? env.MAILGUN_FROM_EMAIL ?? ''
 		},
 		workspace: workspace
 			? { id: workspace.id, name: workspace.name }
@@ -139,7 +205,13 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 			id: s.id,
 			data: JSON.parse(s.data) as Record<string, unknown>,
 			meta: JSON.parse(s.meta) as Record<string, unknown>,
-			createdAt: s.created_at
+			createdAt: s.created_at,
+			// No status while the auto-reply is on: it arrived before the auto-reply was turned on
+			autoreply: s.autoreply_status
+				? { status: s.autoreply_status, at: s.autoreply_at, error: s.autoreply_error }
+				: autoreplyReady(form)
+					? { status: 'not_sent', at: null, error: null }
+					: null
 		})),
 		blockedRequests: blockedRequests.map((blocked) => ({
 			id: blocked.id,
@@ -192,6 +264,31 @@ function normalizeAllowedDomain(domain: string): { normalized: string; error?: s
 		};
 	}
 	return { normalized };
+}
+
+function readFormat(value: FormDataEntryValue | null): BodyFormat {
+	return isBodyFormat(value) ? value : 'text';
+}
+
+function readSubject(value: FormDataEntryValue | null): string {
+	return value?.toString().trim() ?? '';
+}
+
+function readBody(value: FormDataEntryValue | null): string {
+	return value?.toString().replace(/\r\n/g, '\n').trim() ?? '';
+}
+
+function validateTemplate(subject: string, body: string, required: boolean): string | null {
+	if (required && (!subject || !body)) {
+		return 'Add a subject and a message before turning this on';
+	}
+	if (subject.length > MAX_SUBJECT_LENGTH) {
+		return `Keep the subject under ${MAX_SUBJECT_LENGTH} characters`;
+	}
+	if (body.length > MAX_BODY_LENGTH) {
+		return `Keep the message under ${MAX_BODY_LENGTH.toLocaleString('en-US')} characters`;
+	}
+	return null;
 }
 
 export const actions: Actions = {
@@ -486,6 +583,141 @@ export const actions: Actions = {
 		deleteStmt.run(webhookId, params.id);
 
 		return { webhookSuccess: true };
+	},
+
+	updateNotificationEmail: async ({ params, locals, request }) => {
+		const user = locals.user;
+		if (!user) {
+			throw redirect(302, '/auth/login');
+		}
+
+		const form = db.prepare('SELECT id FROM forms WHERE id = ? AND user_id = ?').get(params.id, user.id);
+		if (!form) {
+			throw error(404, 'Form not found');
+		}
+
+		const formData = await request.formData();
+		const reset = formData.get('reset') === '1';
+		const format = readFormat(formData.get('format'));
+		let subject = reset ? '' : readSubject(formData.get('subject'));
+		let body = reset ? '' : readBody(formData.get('body'));
+
+		const templateError = validateTemplate(subject, body, false);
+		if (templateError) {
+			return fail(400, { notifyError: templateError });
+		}
+
+		// Saving the defaults unchanged keeps the form on the built-in template
+		if (subject === DEFAULT_NOTIFY_SUBJECT) subject = '';
+		if (format === 'text' && body === DEFAULT_NOTIFY_BODY) body = '';
+
+		db.prepare('UPDATE forms SET notify_subject = ?, notify_body = ?, notify_format = ? WHERE id = ?').run(
+			subject || null,
+			body || null,
+			body ? format : 'text',
+			params.id
+		);
+
+		return { notifySuccess: true };
+	},
+
+	// Saves the auto-reply content. Sending "enable" turns it on in the same step,
+	// for when the switch is flipped before anything was written.
+	updateAutoreply: async ({ params, locals, request }) => {
+		const user = locals.user;
+		if (!user) {
+			throw redirect(302, '/auth/login');
+		}
+
+		const form = db
+			.prepare('SELECT autoreply_enabled FROM forms WHERE id = ? AND user_id = ?')
+			.get(params.id, user.id) as { autoreply_enabled: number } | undefined;
+		if (!form) {
+			throw error(404, 'Form not found');
+		}
+
+		const formData = await request.formData();
+		const enabled = form.autoreply_enabled === 1 || formData.get('enable') === '1';
+		const format = readFormat(formData.get('format'));
+		const subject = readSubject(formData.get('subject'));
+		const body = readBody(formData.get('body'));
+		const fromName = formData.get('from_name')?.toString().trim() ?? '';
+		const replyTo = formData.get('reply_to')?.toString().trim().toLowerCase() ?? '';
+
+		const templateError = validateTemplate(subject, body, enabled);
+		if (templateError) {
+			return fail(400, { autoreplyError: templateError });
+		}
+		if (fromName.length > 80 || /["<>\\\r\n]/.test(fromName)) {
+			return fail(400, { autoreplyError: 'Sender name must be under 80 characters, without quotes or < >' });
+		}
+		if (replyTo && !isValidEmail(replyTo)) {
+			return fail(400, { autoreplyError: 'Please enter a valid reply-to address' });
+		}
+
+		db.prepare(
+			`UPDATE forms SET autoreply_enabled = ?, autoreply_subject = ?, autoreply_body = ?, autoreply_format = ?,
+				autoreply_from_name = ?, autoreply_reply_to = ? WHERE id = ?`
+		).run(enabled ? 1 : 0, subject || null, body || null, format, fromName || null, replyTo || null, params.id);
+
+		return { autoreplySuccess: true };
+	},
+
+	sendAutoreplyToPast: async ({ params, locals, request }) => {
+		const user = locals.user;
+		if (!user) {
+			throw redirect(302, '/auth/login');
+		}
+
+		const form = db
+			.prepare(
+				`SELECT id, name, autoreply_enabled, autoreply_subject, autoreply_body, autoreply_format,
+					autoreply_from_name, autoreply_reply_to FROM forms WHERE id = ? AND user_id = ?`
+			)
+			.get(params.id, user.id) as AutoreplySettings | undefined;
+		if (!form) {
+			throw error(404, 'Form not found');
+		}
+		if (!autoreplyReady(form)) {
+			return fail(400, { backfillError: 'Turn on the auto-reply first' });
+		}
+
+		const days = Number.parseInt((await request.formData()).get('days')?.toString() ?? '', 10);
+		if (!(BACKFILL_WINDOWS_DAYS as readonly number[]).includes(days)) {
+			return fail(400, { backfillError: 'Choose how far back to go' });
+		}
+
+		const targets = findBackfillTargets(form.id, days).slice(0, BACKFILL_MAX);
+		if (targets.length === 0) {
+			return fail(400, { backfillError: 'Everyone in this period already has the auto-reply' });
+		}
+
+		startBackfill(form, targets);
+
+		return { backfillQueued: targets.length };
+	},
+
+	toggleAutoreply: async ({ params, locals, request }) => {
+		const user = locals.user;
+		if (!user) {
+			throw redirect(302, '/auth/login');
+		}
+
+		const form = db
+			.prepare('SELECT autoreply_subject, autoreply_body FROM forms WHERE id = ? AND user_id = ?')
+			.get(params.id, user.id) as { autoreply_subject: string | null; autoreply_body: string | null } | undefined;
+		if (!form) {
+			throw error(404, 'Form not found');
+		}
+
+		const enabled = (await request.formData()).get('enabled') === '1';
+		if (enabled && (!form.autoreply_subject || !form.autoreply_body)) {
+			return fail(400, { autoreplyError: 'Write the auto-reply before turning it on' });
+		}
+
+		db.prepare('UPDATE forms SET autoreply_enabled = ? WHERE id = ?').run(enabled ? 1 : 0, params.id);
+
+		return { autoreplyToggled: true };
 	},
 
 	deleteForm: async ({ params, locals }) => {

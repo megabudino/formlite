@@ -7,7 +7,8 @@ A self-hosted Formspree alternative - multi-tenant form backend with email notif
 - 🔒 User authentication (initial setup, login, logout)
 - 🔑 Optional single sign-on with any OpenID Connect provider
 - 📝 Create and manage multiple forms
-- 📧 Email notifications via Mailgun
+- 📧 Email notifications via Mailgun, with a customizable message
+- ↩️ Auto-reply to whoever fills in the form (e.g. a lead magnet download link)
 - 🔗 Webhook integrations with HMAC signatures
 - 🍯 Honeypot spam protection, allowed domains and rate limiting
 - 📱 Responsive dashboard
@@ -36,6 +37,7 @@ A self-hosted Formspree alternative - multi-tenant form backend with email notif
 | `MAILGUN_REGION` | Mailgun API region (`us` or `eu`) | `us` |
 | `SUBMISSION_RATE_LIMIT_PER_IP` | Max submissions per minute to a form from a single IP. `0` disables. | `10` |
 | `SUBMISSION_RATE_LIMIT_PER_FORM` | Max submissions per minute to a form overall. `0` disables. | `120` |
+| `AUTOREPLY_LIMIT_PER_RECIPIENT` | Max auto-replies a single address can receive from a form in 24 hours. `0` disables. | `3` |
 | `ADDRESS_HEADER` | Header holding the client IP when running behind a reverse proxy (e.g. `X-Forwarded-For`). See below. | _(none)_ |
 | `XFF_DEPTH` | Number of trusted proxies in front of the app, when `ADDRESS_HEADER=X-Forwarded-For`. | `1` |
 | `OIDC_ISSUER` | OpenID Connect issuer URL. Enables single sign-on together with `OIDC_CLIENT_ID`. See below. | _(none)_ |
@@ -45,6 +47,23 @@ A self-hosted Formspree alternative - multi-tenant form backend with email notif
 | `OIDC_TOKEN_AUTH_METHOD` | How the client secret is sent: `client_secret_basic` or `client_secret_post`. Must match the client registration. | `client_secret_basic` |
 | `OIDC_ACCOUNT_URL` | Account page at your provider. Users with a linked SSO account get a "Manage … account" link in the user menu. | _(none)_ |
 | `PASSWORD_LOGIN` | Set to `false` to allow only single sign-on. Ignored when SSO is not configured. | `true` |
+
+### Notification email and auto-reply
+
+In a form's **Settings → Emails** you can change the notification email, and turn on an **auto-reply** sent to whoever fills in the form (for example, the download link of a lead magnet). The auto-reply goes to the address in the `reply_to` or `email` field. Each email shows a live preview; click it to open the editor.
+
+Emails can be written as plain text or HTML, with placeholders:
+
+- `{{name}}`, `{{email}}`, … any field of the form. Nested fields use dots: `address[city]` becomes `{{address.city}}`. Missing fields stay blank.
+- `{{form_name}}`, `{{submitted_at}}` and `{{all_fields}}` (every field, one per line).
+
+Values typed by visitors are always escaped, so they can't add markup to an HTML email. HTML emails also get a plain-text version for clients that don't show HTML. In plain-text emails, links you write become clickable.
+
+To limit abuse (someone entering another person's address), values typed by visitors are cut to one short line in auto-replies and are never turned into links, and each address receives at most `AUTOREPLY_LIMIT_PER_RECIPIENT` auto-replies per form per day. The counter is kept in memory, like the other rate limits. Auto-replies are sent from `MAILGUN_FROM_EMAIL`; you can set the sender name and the Reply-To address per form.
+
+Each submission shows what happened to its auto-reply: sent, failed, skipped because of the daily limit, or not sent because there was no email address.
+
+When you turn the auto-reply on for a form that already has submissions, Settings → Emails offers to **send it to past submissions** from the last 24 hours, 7 days or 30 days. Each address gets it once, from its latest submission; addresses that already received it are skipped. Up to 500 emails per run, sent one at a time.
 
 ### Rate limiting behind a reverse proxy
 

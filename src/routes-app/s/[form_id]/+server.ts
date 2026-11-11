@@ -1,7 +1,14 @@
 import { json, error, redirect } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import db from '$lib/db';
-import { sendSubmissionEmail } from '$lib/email';
+import { sendToRecipients } from '$lib/email';
+import { sendAutoreply, autoreplyReady, visitorAddress } from '$lib/server/autoreply';
+import {
+	renderEmail,
+	DEFAULT_NOTIFY_SUBJECT,
+	DEFAULT_NOTIFY_BODY,
+	type TemplateContext
+} from '$lib/email-template';
 import { dispatchWebhooks, type Webhook } from '$lib/webhooks';
 import { isOriginAllowed } from '$lib/server/origin';
 import { consumeRateLimit } from '$lib/server/rate-limit';
@@ -135,6 +142,15 @@ interface Form {
 	allowed_domains: string;
 	is_active: number;
 	created_at: string;
+	notify_subject: string | null;
+	notify_body: string | null;
+	notify_format: string;
+	autoreply_enabled: number;
+	autoreply_subject: string | null;
+	autoreply_body: string | null;
+	autoreply_format: string;
+	autoreply_from_name: string | null;
+	autoreply_reply_to: string | null;
 }
 
 function setNestedValue(obj: Record<string, unknown>, key: string, value: unknown): void {
@@ -290,20 +306,31 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 	);
 	const submissionId = Number(result.lastInsertRowid);
 
-	// Send email notification
+	// Replies to the notification go to the visitor
+	const replyToEmail = visitorAddress(cleanData);
+
+	const templateContext: TemplateContext = {
+		data: cleanData,
+		formName: form.name,
+		submittedAt: new Date().toISOString()
+	};
+
+	// Notification to the form owner
 	const targetEmails: string[] = JSON.parse(form.target_emails);
-	
-	// Determine Reply-To: reply_to takes precedence over email
-	const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-	let replyToEmail: string | undefined;
-	
-	if (typeof cleanData.reply_to === 'string' && emailRegex.test(cleanData.reply_to)) {
-		replyToEmail = cleanData.reply_to;
-	} else if (typeof cleanData.email === 'string' && emailRegex.test(cleanData.email)) {
-		replyToEmail = cleanData.email;
-	}
-	
-	sendSubmissionEmail(targetEmails, form.name, cleanData, replyToEmail)
+	const notification = renderEmail(
+		{
+			subject: form.notify_subject || DEFAULT_NOTIFY_SUBJECT,
+			body: form.notify_body || DEFAULT_NOTIFY_BODY,
+			format: form.notify_body && form.notify_format === 'html' ? 'html' : 'text'
+		},
+		templateContext
+	);
+
+	sendToRecipients(
+		targetEmails,
+		{ ...notification, replyTo: replyToEmail },
+		`notification for form "${form.name}"`
+	)
 		.then((results) => {
 			const successCount = results.filter((r) => r.success).length;
 			const failCount = results.length - successCount;
@@ -314,6 +341,11 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 		.catch((err) => {
 			console.error(`[Email] Unexpected error sending emails for form "${form.name}":`, err);
 		});
+
+	// Auto-reply to the visitor; the outcome is recorded on the submission
+	if (autoreplyReady(form)) {
+		void sendAutoreply(form, submissionId, cleanData, templateContext.submittedAt);
+	}
 
 	// Dispatch webhooks asynchronously
 	const webhooks = db.prepare('SELECT * FROM webhooks WHERE form_id = ?').all(form_id) as Webhook[];

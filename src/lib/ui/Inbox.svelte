@@ -7,7 +7,22 @@
 		/** Blocked requests only */
 		origin?: string | null;
 		reason?: string | null;
+		/** Submissions only: what happened to the auto-reply. null when it was off */
+		autoreply?: { status: string; at: string | null; error: string | null } | null;
 	}
+
+	const AUTOREPLY_BADGES: Record<string, { label: string; tone: string }> = {
+		sent: { label: 'Auto-reply sent', tone: 'live' },
+		pending: { label: 'Sending auto-reply…', tone: 'plain' },
+		failed: { label: 'Auto-reply failed', tone: 'spam' },
+		limited: { label: 'Auto-reply skipped: daily limit', tone: 'paused' },
+		no_address: { label: 'No auto-reply: no email address', tone: 'off' },
+		not_sent: { label: 'Auto-reply not sent', tone: 'off' }
+	};
+
+	const AUTOREPLY_HINTS: Record<string, string> = {
+		not_sent: 'Arrived before the auto-reply was turned on. Send it from Settings → Emails.'
+	};
 </script>
 
 <script lang="ts">
@@ -275,6 +290,16 @@
 				<p class="m-0 mt-1 font-mono text-xs text-fg-muted">{fullTime(item.createdAt)}</p>
 				{#if kind === 'blocked'}
 					<span class="fl-badge fl-badge--spam mt-3">{reasonLabel(item.reason ?? null)}</span>
+				{:else if item.autoreply && AUTOREPLY_BADGES[item.autoreply.status]}
+					{@const badge = AUTOREPLY_BADGES[item.autoreply.status]}
+					<span
+						class="fl-badge fl-badge--{badge.tone} mt-3"
+						title={item.autoreply.error ??
+							AUTOREPLY_HINTS[item.autoreply.status] ??
+							(item.autoreply.at ? fullTime(item.autoreply.at) : undefined)}
+					>
+						{badge.label}
+					</span>
 				{/if}
 			</div>
 			<div class="flex flex-wrap gap-2">

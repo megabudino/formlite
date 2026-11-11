@@ -114,7 +114,10 @@ test('fresh installs stay aligned with recorded migrations', () => {
 		[
 			{ id: '001_add_allowed_domains' },
 			{ id: '002_add_workspaces' },
-			{ id: '003_add_session_oidc_id_token' }
+			{ id: '003_add_session_oidc_id_token' },
+			{ id: '004_add_form_email_templates' },
+			{ id: '005_add_email_formats' },
+			{ id: '006_add_submission_autoreply_status' }
 		]
 	);
 	assert.ok(getColumnNames(db, 'forms').includes('allowed_domains'));
@@ -125,7 +128,7 @@ test('fresh installs stay aligned with recorded migrations', () => {
 	// Running migrations again should remain a no-op for already aligned databases.
 	runMigrations(db);
 	const migrationCount = db.prepare('SELECT COUNT(*) as count FROM migrations').get() as { count: number };
-	assert.equal(migrationCount.count, 3);
+	assert.equal(migrationCount.count, 6);
 
 	db.close();
 });
@@ -140,6 +143,10 @@ test('legacy installs are upgraded by all migrations', () => {
 	assert.ok(getColumnNames(db, 'session').includes('oidcIdToken'));
 	assert.ok(formColumns.includes('allowed_domains'));
 	assert.ok(formColumns.includes('workspace_id'));
+	assert.ok(formColumns.includes('autoreply_enabled'));
+	assert.ok(formColumns.includes('notify_body'));
+	assert.ok(formColumns.includes('autoreply_format'));
+	assert.ok(getColumnNames(db, 'submissions').includes('autoreply_status'));
 	assert.ok(getTableNames(db).includes('blocked_requests'));
 	assert.ok(getTableNames(db).includes('workspaces'));
 	assert.deepEqual(
@@ -147,7 +154,10 @@ test('legacy installs are upgraded by all migrations', () => {
 		[
 			{ id: '001_add_allowed_domains' },
 			{ id: '002_add_workspaces' },
-			{ id: '003_add_session_oidc_id_token' }
+			{ id: '003_add_session_oidc_id_token' },
+			{ id: '004_add_form_email_templates' },
+			{ id: '005_add_email_formats' },
+			{ id: '006_add_submission_autoreply_status' }
 		]
 	);
 
@@ -189,7 +199,10 @@ test('schema applied on pre-002 DB succeeds, then migrations bring it up to date
 		[
 			{ id: '001_add_allowed_domains' },
 			{ id: '002_add_workspaces' },
-			{ id: '003_add_session_oidc_id_token' }
+			{ id: '003_add_session_oidc_id_token' },
+			{ id: '004_add_form_email_templates' },
+			{ id: '005_add_email_formats' },
+			{ id: '006_add_submission_autoreply_status' }
 		]
 	);
 
