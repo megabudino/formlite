@@ -235,6 +235,7 @@
 
 	const settingsSections = [
 		{ id: 'general', label: 'General', icon: 'settings' },
+		{ id: 'emails', label: 'Emails', icon: 'mail' },
 		{ id: 'domains', label: 'Allowed domains', icon: 'globe' },
 		{ id: 'webhooks', label: 'Webhooks', icon: 'webhook' }
 	] as const;

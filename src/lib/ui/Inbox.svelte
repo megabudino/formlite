@@ -16,7 +16,12 @@
 		pending: { label: 'Sending auto-reply…', tone: 'plain' },
 		failed: { label: 'Auto-reply failed', tone: 'spam' },
 		limited: { label: 'Auto-reply skipped: daily limit', tone: 'paused' },
-		no_address: { label: 'No auto-reply: no email address', tone: 'off' }
+		no_address: { label: 'No auto-reply: no email address', tone: 'off' },
+		not_sent: { label: 'Auto-reply not sent', tone: 'off' }
+	};
+
+	const AUTOREPLY_HINTS: Record<string, string> = {
+		not_sent: 'Arrived before the auto-reply was turned on. Send it from Settings → Emails.'
 	};
 </script>
 
@@ -289,7 +294,9 @@
 					{@const badge = AUTOREPLY_BADGES[item.autoreply.status]}
 					<span
 						class="fl-badge fl-badge--{badge.tone} mt-3"
-						title={item.autoreply.error ?? (item.autoreply.at ? fullTime(item.autoreply.at) : undefined)}
+						title={item.autoreply.error ??
+							AUTOREPLY_HINTS[item.autoreply.status] ??
+							(item.autoreply.at ? fullTime(item.autoreply.at) : undefined)}
 					>
 						{badge.label}
 					</span>

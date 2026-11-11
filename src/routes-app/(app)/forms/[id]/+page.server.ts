@@ -206,9 +206,12 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 			data: JSON.parse(s.data) as Record<string, unknown>,
 			meta: JSON.parse(s.meta) as Record<string, unknown>,
 			createdAt: s.created_at,
+			// No status while the auto-reply is on: it arrived before the auto-reply was turned on
 			autoreply: s.autoreply_status
 				? { status: s.autoreply_status, at: s.autoreply_at, error: s.autoreply_error }
-				: null
+				: autoreplyReady(form)
+					? { status: 'not_sent', at: null, error: null }
+					: null
 		})),
 		blockedRequests: blockedRequests.map((blocked) => ({
 			id: blocked.id,
