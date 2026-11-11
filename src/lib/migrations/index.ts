@@ -2,13 +2,19 @@ import Database from 'better-sqlite3';
 import { migration as addAllowedDomains } from './001_add_allowed_domains';
 import { migration as addWorkspaces } from './002_add_workspaces';
 import { migration as addSessionOidcIdToken } from './003_add_session_oidc_id_token';
+import { migration as addFormEmailTemplates } from './004_add_form_email_templates';
 
 type Migration = {
 	id: string;
 	up: (db: Database.Database) => void;
 };
 
-const migrations: Migration[] = [addAllowedDomains, addWorkspaces, addSessionOidcIdToken];
+const migrations: Migration[] = [
+	addAllowedDomains,
+	addWorkspaces,
+	addSessionOidcIdToken,
+	addFormEmailTemplates
+];
 
 function runMigrations(db: Database.Database): void {
 	db.exec(

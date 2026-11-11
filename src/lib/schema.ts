@@ -72,6 +72,13 @@ CREATE TABLE IF NOT EXISTS forms (
     target_emails TEXT NOT NULL DEFAULT '[]',
     allowed_domains TEXT NOT NULL DEFAULT '[]',
     is_active INTEGER NOT NULL DEFAULT 1,
+    notify_subject TEXT,
+    notify_body TEXT,
+    autoreply_enabled INTEGER NOT NULL DEFAULT 0,
+    autoreply_subject TEXT,
+    autoreply_body TEXT,
+    autoreply_from_name TEXT,
+    autoreply_reply_to TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE
 );

@@ -4,6 +4,12 @@ import db from '$lib/db';
 import { randomUUID, randomBytes } from 'crypto';
 import { getWorkspace, listWorkspaceForms } from '$lib/server/workspaces';
 import { normalizeAllowedDomain as normalizeDomainEntry } from '$lib/server/origin';
+import {
+	DEFAULT_NOTIFY_SUBJECT,
+	DEFAULT_NOTIFY_BODY,
+	MAX_SUBJECT_LENGTH,
+	MAX_BODY_LENGTH
+} from '$lib/email-template';
 
 interface Form {
 	id: string;
@@ -15,6 +21,13 @@ interface Form {
 	allowed_domains: string;
 	is_active: number;
 	created_at: string;
+	notify_subject: string | null;
+	notify_body: string | null;
+	autoreply_enabled: number;
+	autoreply_subject: string | null;
+	autoreply_body: string | null;
+	autoreply_from_name: string | null;
+	autoreply_reply_to: string | null;
 }
 
 interface Webhook {
@@ -114,6 +127,25 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 
 	const workspace = form.workspace_id ? getWorkspace(user.id, form.workspace_id) : null;
 
+	// Field names from recent submissions, offered as {{placeholders}} in the email editors
+	const recentData = db
+		.prepare('SELECT data FROM submissions WHERE form_id = ? ORDER BY created_at DESC LIMIT 50')
+		.all(params.id) as { data: string }[];
+	const fieldNames = new Set<string>();
+	for (const row of recentData) {
+		try {
+			for (const [key, value] of Object.entries(JSON.parse(row.data) as Record<string, unknown>)) {
+				if (value && typeof value === 'object' && !Array.isArray(value)) {
+					for (const child of Object.keys(value)) fieldNames.add(`${key}.${child}`);
+				} else {
+					fieldNames.add(key);
+				}
+			}
+		} catch {
+			// Skip malformed rows
+		}
+	}
+
 	return {
 		navForms: workspace ? listWorkspaceForms(user.id, workspace.id) : [],
 		form: {
@@ -125,6 +157,16 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 			isActive: form.is_active === 1,
 			createdAt: form.created_at,
 			workspaceId: form.workspace_id
+		},
+		emails: {
+			notifySubject: form.notify_subject ?? '',
+			notifyBody: form.notify_body ?? '',
+			autoreplyEnabled: form.autoreply_enabled === 1,
+			autoreplySubject: form.autoreply_subject ?? '',
+			autoreplyBody: form.autoreply_body ?? '',
+			autoreplyFromName: form.autoreply_from_name ?? '',
+			autoreplyReplyTo: form.autoreply_reply_to ?? '',
+			fieldNames: [...fieldNames].slice(0, 30)
 		},
 		workspace: workspace
 			? { id: workspace.id, name: workspace.name }
@@ -192,6 +234,19 @@ function normalizeAllowedDomain(domain: string): { normalized: string; error?: s
 		};
 	}
 	return { normalized };
+}
+
+function validateTemplate(subject: string, body: string, required: boolean): string | null {
+	if (required && (!subject || !body)) {
+		return 'Add a subject and a message before turning this on';
+	}
+	if (subject.length > MAX_SUBJECT_LENGTH) {
+		return `Keep the subject under ${MAX_SUBJECT_LENGTH} characters`;
+	}
+	if (body.length > MAX_BODY_LENGTH) {
+		return `Keep the message under ${MAX_BODY_LENGTH.toLocaleString('en-US')} characters`;
+	}
+	return null;
 }
 
 export const actions: Actions = {
@@ -486,6 +541,77 @@ export const actions: Actions = {
 		deleteStmt.run(webhookId, params.id);
 
 		return { webhookSuccess: true };
+	},
+
+	updateNotificationEmail: async ({ params, locals, request }) => {
+		const user = locals.user;
+		if (!user) {
+			throw redirect(302, '/auth/login');
+		}
+
+		const form = db.prepare('SELECT id FROM forms WHERE id = ? AND user_id = ?').get(params.id, user.id);
+		if (!form) {
+			throw error(404, 'Form not found');
+		}
+
+		const formData = await request.formData();
+		const reset = formData.get('reset') === '1';
+		let subject = reset ? '' : (formData.get('notify_subject')?.toString().trim() ?? '');
+		let body = reset ? '' : (formData.get('notify_body')?.toString().replace(/\r\n/g, '\n').trim() ?? '');
+
+		const templateError = validateTemplate(subject, body, false);
+		if (templateError) {
+			return fail(400, { notifyError: templateError });
+		}
+
+		// Saving the defaults unchanged keeps the form on the built-in template
+		if (subject === DEFAULT_NOTIFY_SUBJECT) subject = '';
+		if (body === DEFAULT_NOTIFY_BODY) body = '';
+
+		db.prepare('UPDATE forms SET notify_subject = ?, notify_body = ? WHERE id = ?').run(
+			subject || null,
+			body || null,
+			params.id
+		);
+
+		return { notifySuccess: true };
+	},
+
+	updateAutoreply: async ({ params, locals, request }) => {
+		const user = locals.user;
+		if (!user) {
+			throw redirect(302, '/auth/login');
+		}
+
+		const form = db.prepare('SELECT id FROM forms WHERE id = ? AND user_id = ?').get(params.id, user.id);
+		if (!form) {
+			throw error(404, 'Form not found');
+		}
+
+		const formData = await request.formData();
+		const enabled = formData.get('autoreply_enabled') === '1';
+		const subject = formData.get('autoreply_subject')?.toString().trim() ?? '';
+		const body = formData.get('autoreply_body')?.toString().replace(/\r\n/g, '\n').trim() ?? '';
+		const fromName = formData.get('autoreply_from_name')?.toString().trim() ?? '';
+		const replyTo = formData.get('autoreply_reply_to')?.toString().trim().toLowerCase() ?? '';
+
+		const templateError = validateTemplate(subject, body, enabled);
+		if (templateError) {
+			return fail(400, { autoreplyError: templateError });
+		}
+		if (fromName.length > 80 || /["<>\\\r\n]/.test(fromName)) {
+			return fail(400, { autoreplyError: 'Sender name must be under 80 characters, without quotes or < >' });
+		}
+		if (replyTo && !isValidEmail(replyTo)) {
+			return fail(400, { autoreplyError: 'Please enter a valid reply-to address' });
+		}
+
+		db.prepare(
+			`UPDATE forms SET autoreply_enabled = ?, autoreply_subject = ?, autoreply_body = ?,
+				autoreply_from_name = ?, autoreply_reply_to = ? WHERE id = ?`
+		).run(enabled ? 1 : 0, subject || null, body || null, fromName || null, replyTo || null, params.id);
+
+		return { autoreplySuccess: true };
 	},
 
 	deleteForm: async ({ params, locals }) => {

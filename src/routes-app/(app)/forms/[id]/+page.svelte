@@ -7,9 +7,20 @@
 	import IntegrationGuide from '$lib/ui/IntegrationGuide.svelte';
 	import Inbox from '$lib/ui/Inbox.svelte';
 	import WorkspaceShell from '$lib/ui/WorkspaceShell.svelte';
+	import EmailTemplateEditor from '$lib/ui/EmailTemplateEditor.svelte';
+	import {
+		DEFAULT_NOTIFY_SUBJECT,
+		DEFAULT_NOTIFY_BODY,
+		SAMPLE_AUTOREPLY_SUBJECT,
+		SAMPLE_AUTOREPLY_BODY
+	} from '$lib/email-template';
 	import { parseUtc } from '$lib/stats';
 
-	type FormActionData = ActionData & { allowedDomainError?: string };
+	type FormActionData = ActionData & {
+		allowedDomainError?: string;
+		notifyError?: string;
+		autoreplyError?: string;
+	};
 
 	type BlockedRequest = {
 		id: number;
@@ -63,10 +74,54 @@
 	let newWebhookUrl = $state('');
 	let webhookSaving = $state(false);
 	let revealedSecrets = $state<Set<string>>(new Set());
+	let notifyOpen = $state(false);
+	let notifySubject = $state(data.emails.notifySubject || DEFAULT_NOTIFY_SUBJECT);
+	let notifyBody = $state(data.emails.notifyBody || DEFAULT_NOTIFY_BODY);
+	let notifySaving = $state(false);
+	let notifySaved = $state(false);
+	let autoreplyEnabled = $state(data.emails.autoreplyEnabled);
+	let autoreplySubject = $state(data.emails.autoreplySubject);
+	let autoreplyBody = $state(data.emails.autoreplyBody);
+	let autoreplyFromName = $state(data.emails.autoreplyFromName);
+	let autoreplyReplyTo = $state(data.emails.autoreplyReplyTo);
+	let autoreplySaving = $state(false);
+	let autoreplySaved = $state(false);
 	let showDeleteConfirm = $state(false);
 	let deleteConfirmName = $state('');
 
 	const actionUrl = $derived(`${$page.url.origin}/s/${data.form.id}`);
+
+	const notifyCustomized = $derived(data.emails.notifySubject !== '' || data.emails.notifyBody !== '');
+
+	// Previews use the latest submission, or sample values when there is none yet
+	const previewIsSample = $derived(data.submissions.length === 0);
+	const previewData = $derived(
+		data.submissions[0]?.data ?? { name: 'Jane', email: 'jane@example.com', message: 'Hello!' }
+	);
+	const previewFields = $derived(
+		data.emails.fieldNames.length > 0 ? data.emails.fieldNames : ['name', 'email', 'message']
+	);
+
+	// The page is reused when moving between forms: reload the email editors from the new form
+	let emailsFormId = data.form.id;
+	$effect(() => {
+		if (data.form.id === emailsFormId) return;
+		emailsFormId = data.form.id;
+		notifyOpen = false;
+		notifySubject = data.emails.notifySubject || DEFAULT_NOTIFY_SUBJECT;
+		notifyBody = data.emails.notifyBody || DEFAULT_NOTIFY_BODY;
+		autoreplyEnabled = data.emails.autoreplyEnabled;
+		autoreplySubject = data.emails.autoreplySubject;
+		autoreplyBody = data.emails.autoreplyBody;
+		autoreplyFromName = data.emails.autoreplyFromName;
+		autoreplyReplyTo = data.emails.autoreplyReplyTo;
+	});
+
+	// Show a "Saved" tick on the button for a moment after a successful save
+	function flashSaved(set: (value: boolean) => void) {
+		set(true);
+		setTimeout(() => set(false), 3000);
+	}
 
 	// While waiting for the first submission, check every few seconds so the page
 	// flips to the submissions by itself the moment one lands.
@@ -386,7 +441,9 @@
 							<div class="fl-setting">
 								<div>
 									<h2 class="fl-h3">Email notifications</h2>
-									<p class="fl-muted mt-1 text-sm">Every submission is sent to these addresses.</p>
+									<p class="fl-muted mt-1 text-sm">
+										Every submission is sent to these addresses. You can change what the email says.
+									</p>
 								</div>
 								<div class="grid gap-3">
 									<div class="flex flex-wrap gap-2">
@@ -446,7 +503,189 @@
 											<span class="fl-error"><Icon name="alert" size={14} />{form.emailError}</span>
 										{/if}
 									</form>
+
+									{#if !notifyOpen}
+										<div class="flex flex-wrap items-center gap-3">
+											<button
+												type="button"
+												class="fl-btn fl-btn--ghost fl-btn--sm"
+												onclick={() => (notifyOpen = true)}
+											>
+												<Icon name="mail" size={16} />
+												Customize email
+											</button>
+											<span class="fl-help">
+												{notifyCustomized ? 'Using your custom email.' : 'Using the default email.'}
+											</span>
+										</div>
+									{:else}
+										<form
+											method="POST"
+											action="?/updateNotificationEmail"
+											use:enhance={({ formData }) => {
+												notifySaving = true;
+												notifySaved = false;
+												const reset = formData.get('reset') === '1';
+												return async ({ update, result }) => {
+													notifySaving = false;
+													if (result.type === 'success') {
+														if (reset) {
+															notifySubject = DEFAULT_NOTIFY_SUBJECT;
+															notifyBody = DEFAULT_NOTIFY_BODY;
+														}
+														flashSaved((v) => (notifySaved = v));
+													}
+													await update({ reset: false });
+												};
+											}}
+											class="grid gap-4 rounded-md border border-line p-4"
+										>
+											<EmailTemplateEditor
+												idPrefix="notify"
+												subjectName="notify_subject"
+												bodyName="notify_body"
+												bind:subject={notifySubject}
+												bind:body={notifyBody}
+												fieldNames={previewFields}
+												{previewData}
+												{previewIsSample}
+												formName={data.form.name}
+												subjectPlaceholder={DEFAULT_NOTIFY_SUBJECT}
+												bodyPlaceholder={DEFAULT_NOTIFY_BODY}
+											/>
+											{#if form?.notifyError}
+												<span class="fl-error"><Icon name="alert" size={14} />{form.notifyError}</span>
+											{/if}
+											<div class="flex flex-wrap gap-2">
+												<button type="submit" disabled={notifySaving} class="fl-btn fl-btn--secondary">
+													{#if notifySaving}
+														Saving…
+													{:else if notifySaved}
+														<Icon name="check" size={16} /> Saved
+													{:else}
+														Save email
+													{/if}
+												</button>
+												<button
+													type="submit"
+													name="reset"
+													value="1"
+													disabled={notifySaving}
+													class="fl-btn fl-btn--ghost"
+												>
+													Restore default
+												</button>
+												<button
+													type="button"
+													class="fl-btn fl-btn--ghost"
+													onclick={() => (notifyOpen = false)}
+												>
+													Close
+												</button>
+											</div>
+										</form>
+									{/if}
 								</div>
+							</div>
+
+							<!-- Auto-reply -->
+							<div class="fl-setting">
+								<div>
+									<h2 class="fl-h3">Auto-reply</h2>
+									<p class="fl-muted mt-1 text-sm">
+										Send an email to whoever fills in the form, like a download link for a lead magnet.
+										It goes to the address in the <code class="fl-code">email</code> field.
+									</p>
+								</div>
+								<form
+									method="POST"
+									action="?/updateAutoreply"
+									use:enhance={() => {
+										autoreplySaving = true;
+										autoreplySaved = false;
+										return async ({ update, result }) => {
+											autoreplySaving = false;
+											if (result.type === 'success') {
+												flashSaved((v) => (autoreplySaved = v));
+											}
+											await update({ reset: false });
+										};
+									}}
+									class="grid gap-4"
+								>
+									<input type="hidden" name="autoreply_enabled" value={autoreplyEnabled ? '1' : '0'} />
+									<label class="fl-switch">
+										<input type="checkbox" bind:checked={autoreplyEnabled} />
+										Send an auto-reply
+									</label>
+
+									{#if autoreplyEnabled}
+										<div class="grid gap-4 sm:grid-cols-2">
+											<div class="fl-field">
+												<label for="autoreply_from_name" class="fl-label">Sender name</label>
+												<input
+													type="text"
+													id="autoreply_from_name"
+													name="autoreply_from_name"
+													bind:value={autoreplyFromName}
+													placeholder="Jane from Acme"
+													maxlength="80"
+													class="fl-input"
+												/>
+											</div>
+											<div class="fl-field">
+												<label for="autoreply_reply_to" class="fl-label">Replies go to</label>
+												<input
+													type="email"
+													id="autoreply_reply_to"
+													name="autoreply_reply_to"
+													bind:value={autoreplyReplyTo}
+													placeholder={data.form.targetEmails[0] ?? 'you@example.com'}
+													class="fl-input"
+												/>
+											</div>
+										</div>
+										<EmailTemplateEditor
+											idPrefix="autoreply"
+											subjectName="autoreply_subject"
+											bodyName="autoreply_body"
+											bind:subject={autoreplySubject}
+											bind:body={autoreplyBody}
+											fieldNames={previewFields}
+											{previewData}
+											{previewIsSample}
+											formName={data.form.name}
+											clampValues
+											subjectPlaceholder={SAMPLE_AUTOREPLY_SUBJECT}
+											bodyPlaceholder={SAMPLE_AUTOREPLY_BODY}
+										/>
+										<span class="fl-help">
+											Each address gets at most a few auto-replies a day, so the form can't be used to flood
+											someone's inbox. Values typed by visitors are cut to one short line.
+										</span>
+									{:else}
+										<!-- Keep the saved text when turning the auto-reply off -->
+										<input type="hidden" name="autoreply_subject" value={autoreplySubject} />
+										<input type="hidden" name="autoreply_body" value={autoreplyBody} />
+										<input type="hidden" name="autoreply_from_name" value={autoreplyFromName} />
+										<input type="hidden" name="autoreply_reply_to" value={autoreplyReplyTo} />
+									{/if}
+
+									{#if form?.autoreplyError}
+										<span class="fl-error"><Icon name="alert" size={14} />{form.autoreplyError}</span>
+									{/if}
+									<div>
+										<button type="submit" disabled={autoreplySaving} class="fl-btn fl-btn--secondary">
+											{#if autoreplySaving}
+												Saving…
+											{:else if autoreplySaved}
+												<Icon name="check" size={16} /> Saved
+											{:else}
+												Save auto-reply
+											{/if}
+										</button>
+									</div>
+								</form>
 							</div>
 
 							<!-- Domains -->

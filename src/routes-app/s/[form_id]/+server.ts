@@ -1,7 +1,13 @@
 import { json, error, redirect } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import db from '$lib/db';
-import { sendSubmissionEmail } from '$lib/email';
+import { sendToRecipients, sendEmail } from '$lib/email';
+import {
+	renderEmail,
+	DEFAULT_NOTIFY_SUBJECT,
+	DEFAULT_NOTIFY_BODY,
+	type TemplateContext
+} from '$lib/email-template';
 import { dispatchWebhooks, type Webhook } from '$lib/webhooks';
 import { isOriginAllowed } from '$lib/server/origin';
 import { consumeRateLimit } from '$lib/server/rate-limit';
@@ -16,6 +22,10 @@ function readLimit(name: string, fallback: number): number {
 // Max submissions per minute, per form. 0 disables the limit.
 const RATE_LIMIT_PER_IP = readLimit('SUBMISSION_RATE_LIMIT_PER_IP', 10);
 const RATE_LIMIT_PER_FORM = readLimit('SUBMISSION_RATE_LIMIT_PER_FORM', 120);
+
+// Auto-replies per recipient address, per form, per day. 0 disables the limit.
+const AUTOREPLY_LIMIT_PER_RECIPIENT = readLimit('AUTOREPLY_LIMIT_PER_RECIPIENT', 3);
+const AUTOREPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 const baseCorsHeaders = {
 	'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -135,6 +145,13 @@ interface Form {
 	allowed_domains: string;
 	is_active: number;
 	created_at: string;
+	notify_subject: string | null;
+	notify_body: string | null;
+	autoreply_enabled: number;
+	autoreply_subject: string | null;
+	autoreply_body: string | null;
+	autoreply_from_name: string | null;
+	autoreply_reply_to: string | null;
 }
 
 function setNestedValue(obj: Record<string, unknown>, key: string, value: unknown): void {
@@ -290,20 +307,37 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 	);
 	const submissionId = Number(result.lastInsertRowid);
 
-	// Send email notification
-	const targetEmails: string[] = JSON.parse(form.target_emails);
-	
-	// Determine Reply-To: reply_to takes precedence over email
+	// Determine the visitor's address: reply_to takes precedence over email
 	const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 	let replyToEmail: string | undefined;
-	
-	if (typeof cleanData.reply_to === 'string' && emailRegex.test(cleanData.reply_to)) {
-		replyToEmail = cleanData.reply_to;
-	} else if (typeof cleanData.email === 'string' && emailRegex.test(cleanData.email)) {
-		replyToEmail = cleanData.email;
+
+	if (typeof cleanData.reply_to === 'string' && emailRegex.test(cleanData.reply_to.trim())) {
+		replyToEmail = cleanData.reply_to.trim();
+	} else if (typeof cleanData.email === 'string' && emailRegex.test(cleanData.email.trim())) {
+		replyToEmail = cleanData.email.trim();
 	}
-	
-	sendSubmissionEmail(targetEmails, form.name, cleanData, replyToEmail)
+
+	const templateContext: TemplateContext = {
+		data: cleanData,
+		formName: form.name,
+		submittedAt: new Date().toISOString()
+	};
+
+	// Notification to the form owner
+	const targetEmails: string[] = JSON.parse(form.target_emails);
+	const notification = renderEmail(
+		{
+			subject: form.notify_subject || DEFAULT_NOTIFY_SUBJECT,
+			body: form.notify_body || DEFAULT_NOTIFY_BODY
+		},
+		templateContext
+	);
+
+	sendToRecipients(
+		targetEmails,
+		{ ...notification, replyTo: replyToEmail },
+		`notification for form "${form.name}"`
+	)
 		.then((results) => {
 			const successCount = results.filter((r) => r.success).length;
 			const failCount = results.length - successCount;
@@ -314,6 +348,42 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 		.catch((err) => {
 			console.error(`[Email] Unexpected error sending emails for form "${form.name}":`, err);
 		});
+
+	// Auto-reply to the visitor, at most a few times a day per address so the form
+	// can't be used to flood someone else's inbox
+	if (form.autoreply_enabled && form.autoreply_subject && form.autoreply_body && replyToEmail) {
+		const recipient = replyToEmail;
+		const recipientLimit = consumeRateLimit(
+			`autoreply:${form_id}:${recipient.toLowerCase()}`,
+			AUTOREPLY_LIMIT_PER_RECIPIENT,
+			AUTOREPLY_WINDOW_MS
+		);
+
+		if (recipientLimit.allowed) {
+			const autoreply = renderEmail(
+				{ subject: form.autoreply_subject, body: form.autoreply_body },
+				templateContext,
+				{ clampValues: true }
+			);
+			sendEmail(recipient, {
+				...autoreply,
+				fromName: form.autoreply_from_name || undefined,
+				replyTo: form.autoreply_reply_to || undefined
+			})
+				.then((result) => {
+					if (result.success) {
+						console.log(`[Email] Auto-reply for form "${form.name}" sent to ${recipient}`);
+					} else {
+						console.error(`[Email] Auto-reply for form "${form.name}" to ${recipient} failed: ${result.error}`);
+					}
+				})
+				.catch((err) => {
+					console.error(`[Email] Unexpected error sending auto-reply for form "${form.name}":`, err);
+				});
+		} else {
+			console.log(`[Email] Auto-reply for form "${form.name}" to ${recipient} skipped: daily limit reached`);
+		}
+	}
 
 	// Dispatch webhooks asynchronously
 	const webhooks = db.prepare('SELECT * FROM webhooks WHERE form_id = ?').all(form_id) as Webhook[];

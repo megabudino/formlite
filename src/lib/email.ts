@@ -11,39 +11,57 @@ export interface MultiRecipientResult {
 	error?: string;
 }
 
-function logDevEmail(to: string, subject: string, body: string, replyTo?: string): void {
-	const bodyPreview = body.length > 200 ? body.substring(0, 200) + '...' : body;
+export interface EmailMessage {
+	subject: string;
+	text: string;
+	html?: string;
+	replyTo?: string;
+	// Shown as the sender's name. The address always stays MAILGUN_FROM_EMAIL.
+	fromName?: string;
+}
+
+// MAILGUN_FROM_EMAIL can be a bare address or already "Name <address>".
+export function buildFromHeader(fromEmail: string, fromName?: string): string {
+	const name = fromName?.replace(/["<>\\\r\n]/g, '').trim();
+	if (!name) return fromEmail;
+	const address = fromEmail.match(/<([^>]+)>/)?.[1] ?? fromEmail.trim();
+	return `"${name}" <${address}>`;
+}
+
+function logDevEmail(to: string, message: EmailMessage): void {
+	const bodyPreview = message.text.length > 200 ? message.text.substring(0, 200) + '...' : message.text;
 	console.log('[DEV] Email would be sent:');
 	console.log(`  To: ${to}`);
-	console.log(`  Subject: ${subject}`);
-	if (replyTo) {
-		console.log(`  Reply-To: ${replyTo}`);
+	if (message.fromName) {
+		console.log(`  From name: ${message.fromName}`);
+	}
+	console.log(`  Subject: ${message.subject}`);
+	if (message.replyTo) {
+		console.log(`  Reply-To: ${message.replyTo}`);
 	}
 	console.log(`  Body: ${bodyPreview}`);
 }
 
-async function sendToSingleRecipient(
-	to: string,
-	subject: string,
-	body: string,
-	replyTo?: string
-): Promise<SendEmailResult> {
+export async function sendEmail(to: string, message: EmailMessage): Promise<SendEmailResult> {
 	const mailgunConfig = getMailgunConfig();
 	if (!mailgunConfig) {
 		if (isDevelopment()) {
-			logDevEmail(to, subject, body, replyTo);
+			logDevEmail(to, message);
 			return { success: true };
 		}
 		return { success: false, error: 'Email not configured' };
 	}
 
 	const formData = new FormData();
-	formData.append('from', mailgunConfig.fromEmail);
+	formData.append('from', buildFromHeader(mailgunConfig.fromEmail, message.fromName));
 	formData.append('to', to);
-	formData.append('subject', subject);
-	formData.append('text', body);
-	if (replyTo) {
-		formData.append('h:Reply-To', replyTo);
+	formData.append('subject', message.subject);
+	formData.append('text', message.text);
+	if (message.html) {
+		formData.append('html', message.html);
+	}
+	if (message.replyTo) {
+		formData.append('h:Reply-To', message.replyTo);
 	}
 
 	const baseUrl = mailgunConfig.region === 'eu' ? 'https://api.eu.mailgun.net' : 'https://api.mailgun.net';
@@ -73,45 +91,27 @@ async function sendToSingleRecipient(
 	}
 }
 
-export async function sendSubmissionEmail(
+export async function sendToRecipients(
 	to: string[],
-	formName: string,
-	submissionData: Record<string, unknown>,
-	replyTo?: string
+	message: EmailMessage,
+	label: string
 ): Promise<MultiRecipientResult[]> {
 	if (!emailEnabled() && !isDevelopment()) {
 		return to.map((email) => ({ email, success: false, error: 'Email not configured' }));
 	}
 
-	const subject = `New submission from ${formName}`;
-	const body = formatEmailBody(formName, submissionData);
-
 	const results: MultiRecipientResult[] = [];
 
 	for (const email of to) {
-		const result = await sendToSingleRecipient(email, subject, body, replyTo);
+		const result = await sendEmail(email, message);
 		results.push({ email, ...result });
-		
+
 		if (result.success) {
-			console.log(`[Email] Successfully sent to ${email} for form "${formName}"`);
+			console.log(`[Email] Successfully sent ${label} to ${email}`);
 		} else {
-			console.error(`[Email] Failed to send to ${email} for form "${formName}": ${result.error}`);
+			console.error(`[Email] Failed to send ${label} to ${email}: ${result.error}`);
 		}
 	}
 
 	return results;
-}
-
-function formatEmailBody(formName: string, data: Record<string, unknown>): string {
-	const timestamp = new Date().toISOString();
-	let body = `You received a new submission from ${formName}\n\n`;
-	body += `Submitted at: ${timestamp}\n\n`;
-	body += '---\n\n';
-
-	for (const [key, value] of Object.entries(data)) {
-		const displayValue = typeof value === 'object' ? JSON.stringify(value) : String(value);
-		body += `${key}: ${displayValue}\n`;
-	}
-
-	return body;
 }
