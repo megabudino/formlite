@@ -15,7 +15,7 @@
 	const siteName = 'Formlite';
 	const pageTitle = 'Formlite. The form backend you actually own.';
 	const pageDescription =
-		'Formlite is the open source, self hosted alternative to Formspree. Point your HTML form at an endpoint, receive submissions by email and webhook, own your data.';
+		'Formlite is the open source, self hosted alternative to Formspree. Point your HTML form at an endpoint, receive submissions by email and webhook, auto-reply to every lead, own your data.';
 	const ogImageUrl = `${siteUrl}/og-image.svg`;
 	const repoUrl = 'https://github.com/megabudino/formlite';
 	const zeromegaUrl = 'https://www.zeromega.it/en';
@@ -140,6 +140,15 @@
 			body: 'Each form gets its own inbox. Open a message, reply by email in one click, select and delete in bulk.'
 		},
 		{
+			src: '/screenshots/formlite-autoreply-light.webp',
+			alt: 'Formlite auto-reply editor: an HTML email with a download button on the left and its live preview, addressed to the latest lead, on the right',
+			width: 2880,
+			height: 1800,
+			mobile: { src: '/screenshots/formlite-autoreply-mobile.webp', width: 1170, height: 2079 },
+			title: 'Deliver the lead magnet. Automatically.',
+			body: "Turn on an auto-reply and everyone who fills in the form gets your guide, coupon or link right away. Write it in plain text or HTML, with their name in it."
+		},
+		{
 			src: '/screenshots/formlite-dashboard-light.webp',
 			alt: 'Formlite dashboard with three workspaces and a 30-day sparkline of submissions for each',
 			width: 2240,
@@ -180,7 +189,8 @@
 	title="A form endpoint you drop into your HTML. On your server. For free."
 	body="Formlite is a small, fast, multi tenant form backend you self host in a single Docker container. Create a form, point your form action at it, and submissions land in your inbox and your webhooks. Signed. Spam filtered. Stored in your own SQLite database."
 	features={[
-		{ icon: 'mail', label: 'Email notifications via Mailgun' },
+		{ icon: 'mail', label: 'Email notifications you can rewrite' },
+		{ icon: 'send', label: 'Auto-reply to every lead, in text or HTML' },
 		{ icon: 'webhook', label: 'HMAC signed webhooks' },
 		{ icon: 'shield', label: 'Honeypot spam protection' },
 		{ icon: 'globe', label: 'Domain allowlist' },
